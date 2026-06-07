@@ -456,15 +456,26 @@ Actions poll(uint32_t nowMs) {
                           -1.f);
                 store::markDirty();
                 break;
-            case kKeyTilt:
+            case kKeyTilt: {
                 cfgr.tiltOn = !cfgr.tiltOn;
-                if (cfgr.tiltRoute == store::TiltRoute::Off && cfgr.tiltOn)
-                    hud::show("TILT", "on (route in settings)", -1.f);
+                // never a dead toggle: turning tilt ON with no route (or no
+                // depth) self-heals to a sensible wah instead of doing
+                // nothing until a settings trip
+                if (cfgr.tiltOn) {
+                    if (cfgr.tiltRoute == store::TiltRoute::Off)
+                        cfgr.tiltRoute = store::TiltRoute::Cutoff;
+                    if (cfgr.tiltDepth < 0.05f) cfgr.tiltDepth = 0.6f;
+                }
+                char v[20];
+                if (cfgr.tiltOn)
+                    snprintf(v, sizeof v, "%s %d%%", store::tiltRouteName(cfgr.tiltRoute),
+                             (int)(cfgr.tiltDepth * 100));
                 else
-                    hud::show("TILT", cfgr.tiltOn ? store::tiltRouteName(cfgr.tiltRoute) : "off",
-                              -1.f);
+                    snprintf(v, sizeof v, "off");
+                hud::show("TILT", v, cfgr.tiltOn ? cfgr.tiltDepth : -1.f);
                 store::markDirty();
                 break;
+            }
             default:
                 break;
         }
