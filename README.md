@@ -164,6 +164,16 @@ Entry procedure: power OFF, hold G0, plug USB-C, release G0.
 No WiFi, no accounts, no setup. Power on → splash (the boot chime is a
 single note gliding up an octave, played through the synth itself) → play.
 
+**Persistence & reset:** everything you touch — sounds, tweaks, octave,
+scale, tilt setup, jam rows — saves to flash moments after you change it
+and survives reboots *and* firmware updates (NVS lives outside the app
+partition). Three ways back:
+- settings → *Sound reset* — current slot back to factory
+- settings → *Reset defaults* — all settings back to factory (your saved
+  sounds are kept)
+- **hold backspace while powering on** — full factory reset, settings AND
+  saved sounds, even if stored state ever wedges the UI
+
 ## Before you trust it: the Phase 0 probe
 
 Two hardware assumptions need validating on *your* unit before the

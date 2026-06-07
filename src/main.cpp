@@ -6,6 +6,7 @@
 #include <M5Cardputer.h>
 
 #include "config.h"
+#include "dsp/patches.h"
 #include "io/audio_engine.h"
 #include "io/keys.h"
 #include "io/tilt.h"
@@ -60,6 +61,29 @@ void setup() {
     Serial.println("[glide] boot");
 
     store::begin();
+
+    // Escape hatch: hold BACKSPACE while powering on -> full factory reset
+    // (settings AND saved sound slots). Works even if stored state ever
+    // wedges the UI itself.
+    M5Cardputer.update();
+    for (const auto& p : M5Cardputer.Keyboard.keyList()) {
+        if (p.y == 0 && p.x == 13) {  // backspace
+            store::resetDefaults();
+            for (int i = 0; i < dsp::kPatchCount; ++i) store::clearOverride(i);
+            auto& d = M5Cardputer.Display;
+            d.fillScreen(theme::kBg);
+            d.setFont(&fonts::Font2);
+            d.setTextDatum(middle_center);
+            d.setTextColor(theme::kAmber, theme::kBg);
+            d.drawString("FACTORY RESET", cfg::kScreenW / 2, 58);
+            d.setFont(&fonts::Font0);
+            d.setTextColor(theme::kDim, theme::kBg);
+            d.drawString("settings + saved sounds cleared", cfg::kScreenW / 2, 78);
+            d.setTextDatum(top_left);
+            delay(1600);
+            break;
+        }
+    }
 
     if (!audio::begin()) fatalAudio(audio::lastError());
     audio::setParams(store::get().synth);
