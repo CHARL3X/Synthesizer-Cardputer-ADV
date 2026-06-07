@@ -10,7 +10,7 @@
 
 namespace splash {
 
-void run() {
+bool run() {
     auto& d = M5Cardputer.Display;
     d.fillScreen(theme::kBg);
 
@@ -35,7 +35,9 @@ void run() {
         audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::On, kChimeId, 0xFF, false, 57.f));
     }
 
-    // phosphor sweep under the wordmark, paced with the chime's glide
+    // phosphor sweep under the wordmark, paced with the chime's glide;
+    // doubles as the factory-reset window (backspace press = reset request)
+    bool resetRequested = false;
     const int y = 96, x0 = 40, x1 = cfg::kScreenW - 40;
     for (int step = 0; step <= 24; ++step) {
         const int x = x0 + (x1 - x0) * step / 24;
@@ -43,11 +45,15 @@ void run() {
         if (chime && step == 6)
             audio::pushEvent(
                 dsp::NoteEvent::make(dsp::NoteEvent::Retarget, kChimeId, 0xFF, false, 69.f));
+        M5Cardputer.update();
+        for (const auto& p : M5Cardputer.Keyboard.keyList())
+            if (p.y == 0 && p.x == 13) resetRequested = true;  // backspace
         delay(34);
     }
     if (chime) audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, kChimeId));
     delay(250);
     audio::setParams(store::get().synth);  // restore live params
+    return resetRequested;
 }
 
 }  // namespace splash

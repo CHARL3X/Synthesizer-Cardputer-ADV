@@ -80,7 +80,8 @@ struct NoteEvent {
         On,        // fresh note (legato=false) or lane hand-off (legato=true)
         Off,       // release by id
         Retarget,  // re-aim a sounding note's pitch with an explicit glide
-        AllOff     // panic
+        AllOff,    // panic: everything dies, drones included
+        LeadsOff   // clear the solo layer; latched drones keep ringing
     };
     Type    type   = On;
     uint8_t id     = 0;     // physical key code — identity for Off/Retarget

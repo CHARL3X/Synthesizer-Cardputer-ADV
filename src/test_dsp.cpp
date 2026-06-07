@@ -171,6 +171,18 @@ int main() {
     s.handleEvent(NoteEvent::make(NoteEvent::AllOff, 0, 0xFF, false, 0.f));
     peakOf(s, 40);
 
+    // ---- LeadsOff: sound switches / settings clear the solo, not the jam --
+    dr = NoteEvent::make(NoteEvent::On, 45, 0xFF, false, 45.f);
+    dr.drone = true;
+    s.handleEvent(dr);
+    s.handleEvent(NoteEvent::make(NoteEvent::On, 46, 0xFF, false, 69.f));
+    peakOf(s, 4);
+    s.handleEvent(NoteEvent::make(NoteEvent::LeadsOff, 0, 0xFF, false, 0.f));
+    peakOf(s, 4);
+    CHECK(s.heldVoices() == 1, "LeadsOff keeps the drone ringing");
+    s.handleEvent(NoteEvent::make(NoteEvent::AllOff, 0, 0xFF, false, 0.f));
+    peakOf(s, 40);
+
     // ---- factory sound bank: every patch is alive and sane ----------------
     // Exercises the new engine paths: sub-osc (BASS), noise (GHOST/PERC),
     // filter envelope (PLUCK/ACID/PERC), drive (ACID), auto-vib (WHISTLE).

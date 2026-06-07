@@ -113,7 +113,50 @@ void drawStatus(M5Canvas& c) {
     c.setTextDatum(top_left);
 }
 
+// While fn is held the scope yields to a map of the whole layer: all ten
+// parameters with live values on the left, all ten sounds on the right.
+// No more playing the edit layer blind.
+void drawEditPanel(M5Canvas& c) {
+    static const char* kShort[10] = {"GLIDE",  "ATTACK", "DECAY",  "SUSTAIN", "RELEASE",
+                                     "WAVE",   "CUTOFF", "VOICES", "BEND",    "VOLUME"};
+    static const char kParamKeys[11] = "1234567890";
+    static const char kPatchKeys[11] = "qwertyuiop";
+    auto& cf = store::get();
+    const int sel = keys::quickEditParam();
+
+    c.setFont(&fonts::Font0);
+    char buf[24], val[10];
+    for (int i = 0; i < 10; ++i) {
+        const int y = kScopeY + 1 + i * 8;
+        // params (left)
+        keys::quickParamValue(i, val, sizeof val);
+        snprintf(buf, sizeof buf, "%c %-7s %s", kParamKeys[i], kShort[i], val);
+        if (i == sel) {
+            c.fillRect(2, y - 1, 116, 8, theme::kPanel);
+            c.setTextColor(theme::kAmber, theme::kPanel);
+        } else {
+            c.setTextColor(theme::kDim, theme::kBg);
+        }
+        c.drawString(buf, 6, y);
+        // sounds (right)
+        const bool cur = (i == cf.currentPatch);
+        snprintf(buf, sizeof buf, "%c %s%s", kPatchKeys[i], store::patchName(i),
+                 store::patchHasOverride(i) ? "*" : "");
+        if (cur) {
+            c.fillRect(126, y - 1, 112, 8, theme::kPanel);
+            c.setTextColor(theme::kGreen, theme::kPanel);
+        } else {
+            c.setTextColor(theme::kDim, theme::kBg);
+        }
+        c.drawString(buf, 130, y);
+    }
+}
+
 void drawScope(M5Canvas& c, uint32_t now) {
+    if (keys::quickEditActive()) {
+        drawEditPanel(c);
+        return;
+    }
     // graticule
     c.drawFastHLine(kTraceX, kScopeMid, kTraceW, theme::kLine);
     for (int x = kTraceX; x < kTraceX + kTraceW; x += 29)
@@ -131,9 +174,8 @@ void drawScope(M5Canvas& c, uint32_t now) {
         }
     }
 
-    const bool dim = keys::quickEditActive();
-    const uint16_t glow = theme::scale(theme::kGreen, dim ? 30 : 80);
-    const uint16_t bright = dim ? theme::scale(theme::kGreen, 90) : theme::kGreen;
+    const uint16_t glow = theme::scale(theme::kGreen, 80);
+    const uint16_t bright = theme::kGreen;
     const float gain = (kScopeH / 2 - 3) * 1.25f;
 
     // afterglow: last frame's trace lingers like phosphor

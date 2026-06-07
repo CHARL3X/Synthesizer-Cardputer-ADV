@@ -12,6 +12,8 @@ GlideConfig gCfg;
 Preferences gPrefs;
 bool gDirty = false;
 uint32_t gDirtySince = 0;
+uint16_t gOverrideMask = 0;  // cached per-slot override flags — the UI asks
+                             // every frame; NVS must not be in that path
 
 template <typename T>
 T clampT(T v, T lo, T hi) {
@@ -42,6 +44,19 @@ GlideConfig& get() {
 void begin() {
     gPrefs.begin(cfg::kNvsNamespace, false);
     GlideConfig d;  // defaults
+
+    // scan override slots once; afterwards patchHasOverride is a bit test
+    gOverrideMask = 0;
+    for (int i = 0; i < dsp::kPatchCount; ++i) {
+        char key[3];
+        patchKey(i, key);
+        if (gPrefs.getBytesLength(key) == sizeof(PatchBlob)) {
+            PatchBlob b;
+            if (gPrefs.getBytes(key, &b, sizeof b) == sizeof b &&
+                b.version == kPatchBlobVersion)
+                gOverrideMask |= (uint16_t)(1u << i);
+        }
+    }
 
     auto& s = gCfg.synth;
     s.wave = (dsp::Waveform)clampT<int>(gPrefs.getUChar("wave", (uint8_t)d.synth.wave), 0,
@@ -138,12 +153,8 @@ void resetDefaults() {
 // ---- sound slots -----------------------------------------------------------
 
 bool patchHasOverride(int slot) {
-    char key[3];
-    patchKey(slot, key);
-    if (gPrefs.getBytesLength(key) != sizeof(PatchBlob)) return false;
-    PatchBlob b;
-    gPrefs.getBytes(key, &b, sizeof b);
-    return b.version == kPatchBlobVersion;
+    if (slot < 0 || slot >= dsp::kPatchCount) return false;
+    return (gOverrideMask >> slot) & 1u;  // cached: called per UI frame
 }
 
 void applyPatch(int slot) {
@@ -166,6 +177,8 @@ void applyPatch(int slot) {
     gCfg.synth.vibratoCents = 0.f;
     gCfg.synth.cutoffModOct = 0.f;
     gCfg.synth.volMod = 1.f;
+    gCfg.synth.voiceCount =
+        (uint8_t)clampT<int>(gCfg.synth.voiceCount, 1, dsp::kMaxVoices);  // blob hygiene
     gCfg.currentPatch = (uint8_t)slot;
     markDirty();
 }
@@ -185,6 +198,7 @@ bool savePatch(int slot) {
     patchKey(slot, key);
     const bool ok = gPrefs.putBytes(key, &b, sizeof b) == sizeof b;
     if (ok) {
+        gOverrideMask |= (uint16_t)(1u << slot);
         gCfg.currentPatch = (uint8_t)slot;
         markDirty();
     }
@@ -196,6 +210,7 @@ void clearOverride(int slot) {
     char key[3];
     patchKey(slot, key);
     gPrefs.remove(key);
+    gOverrideMask &= (uint16_t)~(1u << slot);
 }
 
 const char* patchName(int slot) {

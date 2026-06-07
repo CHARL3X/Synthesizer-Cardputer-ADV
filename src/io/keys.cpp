@@ -225,6 +225,20 @@ void clearAllNotes() {
     store::get().synth.bendCents = 0.f;
 }
 
+// Clear the solo layer only — latched drones keep ringing. Used by sound
+// switching and settings trips so the backing never dies under you.
+void clearLeadNotes() {
+    audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::LeadsOff, 0));
+    for (auto& n : gNotes) {
+        if (n.drone && n.string >= 0) continue;  // the jam survives
+        n.physical = n.sustained = n.drone = false;
+        n.string = -1;
+    }
+    for (int l = 0; l < 4; ++l) gLaneDepth[l] = 0;
+    gBendCents = 0.f;
+    store::get().synth.bendCents = 0.f;
+}
+
 void panic() {
     clearAllNotes();
     hud::show("PANIC", "all notes off", -1.f);
@@ -278,29 +292,27 @@ const QuickParam kQuick[10] = {
     {"WAVEFORM"}, {"CUTOFF"}, {"VOICES"},     {"BEND RANGE"}, {"VOLUME"},
 };
 
-void hudQuickValue(int idx) {
+float quickFill(int idx) {
     auto& cfgr = store::get();
     auto& s = cfgr.synth;
-    char v[20];
-    float fill = -1.f;
     switch (idx) {
-        case 0: snprintf(v, sizeof v, "%d ms", (int)(s.glideS * 1000)); fill = s.glideS / 2.f; break;
-        case 1: snprintf(v, sizeof v, "%d ms", (int)(s.attackS * 1000)); fill = s.attackS / 2.f; break;
-        case 2: snprintf(v, sizeof v, "%d ms", (int)(s.decayS * 1000)); fill = s.decayS / 2.f; break;
-        case 3: snprintf(v, sizeof v, "%d %%", (int)(s.sustain * 100)); fill = s.sustain; break;
-        case 4: snprintf(v, sizeof v, "%d ms", (int)(s.releaseS * 1000)); fill = s.releaseS / 3.f; break;
-        case 5: snprintf(v, sizeof v, "%s", dsp::waveformName(s.wave)); break;
-        case 6:
-            if (s.cutoffHz >= 1000.f) snprintf(v, sizeof v, "%.1f kHz", s.cutoffHz / 1000.f);
-            else snprintf(v, sizeof v, "%d Hz", (int)s.cutoffHz);
-            fill = log10f(s.cutoffHz / 80.f) / log10f(12000.f / 80.f);
-            break;
-        case 7: snprintf(v, sizeof v, "%d", s.voiceCount); fill = s.voiceCount / 8.f; break;
-        case 8: snprintf(v, sizeof v, "%d st", cfgr.bendRange); fill = cfgr.bendRange / 12.f; break;
-        case 9: snprintf(v, sizeof v, "%d %%", (int)(s.masterVol * 100)); fill = s.masterVol; break;
-        default: v[0] = '\0'; break;
+        case 0: return s.glideS / 2.f;
+        case 1: return s.attackS / 2.f;
+        case 2: return s.decayS / 2.f;
+        case 3: return s.sustain;
+        case 4: return s.releaseS / 3.f;
+        case 6: return log10f(s.cutoffHz / 80.f) / log10f(12000.f / 80.f);
+        case 7: return s.voiceCount / 8.f;
+        case 8: return cfgr.bendRange / 12.f;
+        case 9: return s.masterVol;
+        default: return -1.f;
     }
-    hud::show(kQuick[idx].name, v, fill);
+}
+
+void hudQuickValue(int idx) {
+    char v[20];
+    quickParamValue(idx, v, sizeof v);
+    hud::show(kQuick[idx].name, v, quickFill(idx));
 }
 
 template <typename T>
@@ -346,7 +358,7 @@ void resync() {
     M5Cardputer.update();
     gPrevMask = 0;
     for (const auto& p : M5Cardputer.Keyboard.keyList()) gPrevMask |= 1ULL << code(p.y, p.x);
-    clearAllNotes();
+    clearLeadNotes();  // drones ride through settings trips
 }
 
 Actions poll(uint32_t nowMs) {
@@ -390,7 +402,7 @@ Actions poll(uint32_t nowMs) {
                             hud::showError("SOUND", "save failed");
                         }
                     } else {
-                        clearAllNotes();  // a new instrument starts clean
+                        clearLeadNotes();  // new sound, same jam: drones ring on
                         store::applyPatch(slot);
                         audio::setParams(store::get().synth);
                         snprintf(v, sizeof v, "%s%s", store::patchName(slot),
@@ -515,7 +527,9 @@ Actions poll(uint32_t nowMs) {
         if (held(cur, kKeyBendDown)) bendTarget -= cfgr.bendRange * 100.f;
     }
     const float rate = (cfgr.bendRange * 100.f) / (float)cfgr.bendMs;  // cents per ms
-    const float step = rate * dtMs;
+    // a released string snaps back faster than it bends up (Gilmour physics)
+    const bool releasing = fabsf(bendTarget) < fabsf(gBendCents);
+    const float step = rate * dtMs * (releasing ? 2.f : 1.f);
     if (gBendCents < bendTarget) {
         gBendCents += step;
         if (gBendCents > bendTarget) gBendCents = bendTarget;
@@ -542,6 +556,31 @@ bool noteHeld(int string, int col) {
 
 bool quickEditActive() { return gQuickEdit; }
 int quickEditParam() { return gQuickParam; }
+
+const char* quickParamName(int idx) {
+    return (idx >= 0 && idx < 10) ? kQuick[idx].name : "?";
+}
+
+void quickParamValue(int idx, char* out, int cap) {
+    auto& cfgr = store::get();
+    auto& s = cfgr.synth;
+    switch (idx) {
+        case 0: snprintf(out, cap, "%dms", (int)(s.glideS * 1000)); break;
+        case 1: snprintf(out, cap, "%dms", (int)(s.attackS * 1000)); break;
+        case 2: snprintf(out, cap, "%dms", (int)(s.decayS * 1000)); break;
+        case 3: snprintf(out, cap, "%d%%", (int)(s.sustain * 100)); break;
+        case 4: snprintf(out, cap, "%dms", (int)(s.releaseS * 1000)); break;
+        case 5: snprintf(out, cap, "%s", dsp::waveformName(s.wave)); break;
+        case 6:
+            if (s.cutoffHz >= 1000.f) snprintf(out, cap, "%.1fk", s.cutoffHz / 1000.f);
+            else snprintf(out, cap, "%d", (int)s.cutoffHz);
+            break;
+        case 7: snprintf(out, cap, "%d", s.voiceCount); break;
+        case 8: snprintf(out, cap, "%dst", cfgr.bendRange); break;
+        case 9: snprintf(out, cap, "%d%%", (int)(s.masterVol * 100)); break;
+        default: out[0] = '\0'; break;
+    }
+}
 float bendCentsNow() { return gBendCents; }
 bool holdLatched() { return gHoldLatch; }
 bool sustainActive() { return gSustainHeld || gHoldLatch; }

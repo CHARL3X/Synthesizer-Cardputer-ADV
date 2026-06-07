@@ -100,8 +100,13 @@ void fTiltCenter(char* o, int c) {
     snprintf(o, c, "%+d (set: , /)", (int)(store::get().tiltCenter * 100));
 }
 void aTiltCenter(int) {
-    // capture how you're holding it RIGHT NOW as "flat"
-    tilt::poll();
+    // capture how you're holding it RIGHT NOW as "flat". The reading is
+    // one-pole smoothed (15%/step), so converge before trusting it —
+    // a single poll would capture stale history from before this screen.
+    for (int i = 0; i < 30; ++i) {
+        tilt::poll();
+        delay(2);
+    }
     store::get().tiltCenter = tilt::raw();
 }
 
@@ -199,8 +204,9 @@ void draw(M5Canvas& c, int sel, int top) {
 }  // namespace
 
 void run(M5Canvas& canvas) {
-    // quiet the instrument while configuring
-    audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::AllOff, 0));
+    // quiet the solo layer; latched drones keep ringing so every edit is
+    // heard live against the backing — sound design with your ears on
+    audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::LeadsOff, 0));
 
     int sel = 0, top = 0;
     uint64_t prev = ~0ULL;  // force first frame to treat keys as already-held

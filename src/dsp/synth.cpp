@@ -86,12 +86,14 @@ int Synth::activeVoices() const {
 
 void Synth::noteOn(const NoteEvent& ev) {
     // Re-press of a key whose voice is still sounding (sustain pedal overlap,
-    // release tail): retrigger that voice in place.
+    // release tail): retrigger that voice in place. The voice adopts the
+    // event's role — a re-pressed ex-drone key becomes a normal lead voice.
     if (Voice* v = findActiveById(ev.id)) {
         v->legatoTo(ev.id, ev.lane, ev.pitchMidi);
         v->retrigger();
+        v->setDrone(ev.drone);
         fenvStage_ = FEnv::Attack;  // a re-strike snaps the filter again
-        leadIdx_ = (int8_t)(v - voices_);
+        if (!ev.drone) leadIdx_ = (int8_t)(v - voices_);
         return;
     }
 
@@ -149,11 +151,18 @@ void Synth::handleEvent(const NoteEvent& ev) {
         case NoteEvent::Retarget:
             if (Voice* v = findActiveById(ev.id)) {
                 v->retarget(ev.pitchMidi);
-                leadIdx_ = (int8_t)(v - voices_);
+                // never let a retuned drone hijack the note readout
+                if (!v->isDrone()) leadIdx_ = (int8_t)(v - voices_);
             }
             break;
         case NoteEvent::AllOff:
             for (auto& v : voices_) v.kill();
+            break;
+        case NoteEvent::LeadsOff:
+            // the backing layer plays through sound switches and settings
+            // trips — only the solo hand resets
+            for (auto& v : voices_)
+                if (v.active() && !v.isDrone()) v.kill();
             break;
     }
 }

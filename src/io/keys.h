@@ -31,6 +31,8 @@ Actions poll(uint32_t nowMs);
 bool noteHeld(int string, int col);
 bool quickEditActive();
 int quickEditParam();          // selected slot 0..9
+const char* quickParamName(int idx);
+void quickParamValue(int idx, char* out, int cap);  // formatted current value
 float bendCentsNow();
 bool holdLatched();
 bool sustainActive();

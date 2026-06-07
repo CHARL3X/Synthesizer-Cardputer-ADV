@@ -62,33 +62,31 @@ void setup() {
 
     store::begin();
 
-    // Escape hatch: hold BACKSPACE while powering on -> full factory reset
-    // (settings AND saved sound slots). Works even if stored state ever
-    // wedges the UI itself.
-    M5Cardputer.update();
-    for (const auto& p : M5Cardputer.Keyboard.keyList()) {
-        if (p.y == 0 && p.x == 13) {  // backspace
-            store::resetDefaults();
-            for (int i = 0; i < dsp::kPatchCount; ++i) store::clearOverride(i);
-            auto& d = M5Cardputer.Display;
-            d.fillScreen(theme::kBg);
-            d.setFont(&fonts::Font2);
-            d.setTextDatum(middle_center);
-            d.setTextColor(theme::kAmber, theme::kBg);
-            d.drawString("FACTORY RESET", cfg::kScreenW / 2, 58);
-            d.setFont(&fonts::Font0);
-            d.setTextColor(theme::kDim, theme::kBg);
-            d.drawString("settings + saved sounds cleared", cfg::kScreenW / 2, 78);
-            d.setTextDatum(top_left);
-            delay(1600);
-            break;
-        }
-    }
-
     if (!audio::begin()) fatalAudio(audio::lastError());
     audio::setParams(store::get().synth);
 
-    splash::run();
+    // Escape hatch: press BACKSPACE during the boot splash -> full factory
+    // reset (settings AND saved sound slots). Works even if stored state
+    // ever wedges the UI. NOTE: it must be a press DURING the splash — the
+    // ADV's TCA8418 keyboard is event-driven, so a key held from power-on
+    // never produces an event (audited; a held-key gesture is dead on this
+    // hardware).
+    if (splash::run()) {
+        store::resetDefaults();
+        for (int i = 0; i < dsp::kPatchCount; ++i) store::clearOverride(i);
+        audio::setParams(store::get().synth);
+        auto& d = M5Cardputer.Display;
+        d.fillScreen(theme::kBg);
+        d.setFont(&fonts::Font2);
+        d.setTextDatum(middle_center);
+        d.setTextColor(theme::kAmber, theme::kBg);
+        d.drawString("FACTORY RESET", cfg::kScreenW / 2, 58);
+        d.setFont(&fonts::Font0);
+        d.setTextColor(theme::kDim, theme::kBg);
+        d.drawString("settings + saved sounds cleared", cfg::kScreenW / 2, 78);
+        d.setTextDatum(top_left);
+        delay(1600);
+    }
 
     keys::begin();
     tilt::begin();

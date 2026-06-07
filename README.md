@@ -171,8 +171,10 @@ partition). Three ways back:
 - settings → *Sound reset* — current slot back to factory
 - settings → *Reset defaults* — all settings back to factory (your saved
   sounds are kept)
-- **hold backspace while powering on** — full factory reset, settings AND
-  saved sounds, even if stored state ever wedges the UI
+- **press backspace during the boot splash** — full factory reset, settings
+  AND saved sounds, even if stored state ever wedges the UI. (It must be a
+  press *during* the splash, not held from power-on — the ADV's keyboard
+  chip is event-driven and can't see a key that never changes.)
 
 ## Before you trust it: the Phase 0 probe
 
