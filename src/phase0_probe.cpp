@@ -44,7 +44,8 @@ void audioTask(void*) {
     uint8_t b = 0;
     for (;;) {
         while (spk.isPlaying(kCh) >= 2) vTaskDelay(1);
-        if (spk.isPlaying(kCh) == 0) gStarved++;
+        // queue fully drained after warm-up = we were late = audible gap
+        if (gBlocksDone > 16 && spk.isPlaying(kCh) == 0) gStarved++;
 
         if (gInjectStall) {
             gInjectStall = false;
@@ -61,7 +62,9 @@ void audioTask(void*) {
         } else {
             memset(blk, 0, sizeof(int16_t) * kBlock);
         }
-        if (!spk.playRaw(blk, kBlock, kSampleRate, false, 1, kCh, false)) gStarved++;
+        // playRaw's return value is not a health signal (lies on failure
+        // paths, blocks on full queue) — isPlaying()==0 above is the metric
+        spk.playRaw(blk, kBlock, kSampleRate, false, 1, kCh, false);
         gBlocksDone++;
         b = (b + 1) % kBufs;
     }

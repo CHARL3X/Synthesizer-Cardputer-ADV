@@ -48,9 +48,15 @@ void Voice::retrigger() {
 
 void Voice::noteOff(float releaseS) {
     if (env_ == Env::Idle) return;
+    if (lvl_ < 1e-3f) {  // released during the first ms of attack: inaudible —
+        lvl_ = 0.f;      // free the slot now instead of squatting for releaseS
+        env_ = Env::Idle;
+        return;
+    }
     if (releaseS < kMinSegS) releaseS = kMinSegS;
-    relRate_ = lvl_ / (releaseS * sr_);
-    if (relRate_ <= 0.f) relRate_ = 1.f;  // lvl 0: finish immediately
+    // constant-rate release: full scale takes releaseS, quieter notes finish
+    // proportionally sooner — so staccato tails never exhaust the voice pool
+    relRate_ = 1.f / (releaseS * sr_);
     env_ = Env::Release;
 }
 
@@ -112,13 +118,11 @@ void Voice::render(float* out, int n, const SynthParams& p, float centsOffset) {
                 break;
             case Env::Decay:
                 lvl_ -= dInc;
-                if (lvl_ <= p.sustain) {
-                    lvl_ = p.sustain;
-                    env_ = Env::Sustain;
-                }
+                if (lvl_ <= p.sustain) env_ = Env::Sustain;  // no snap: slew below
                 break;
             case Env::Sustain:
-                lvl_ = p.sustain;
+                // slew toward the live sustain value so mid-note edits don't click
+                lvl_ += (p.sustain - lvl_) * 0.0008f;
                 break;
             case Env::Release:
                 lvl_ -= relRate_;

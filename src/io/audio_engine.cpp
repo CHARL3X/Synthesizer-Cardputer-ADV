@@ -55,10 +55,13 @@ void renderTask(void*) {
     }
 
     uint8_t b = 0;
+    uint32_t blocksDone = 0;
     for (;;) {
         // Backpressure pacing: render exactly as fast as the DMA drains.
         while (spk.isPlaying(cfg::kAudioChannel) >= 2) vTaskDelay(1);
-        if (spk.isPlaying(cfg::kAudioChannel) == 0) gStarved.fetch_add(1);
+        // queue fully drained after warm-up = we were late = audible gap risk
+        if (blocksDone > 16 && spk.isPlaying(cfg::kAudioChannel) == 0) gStarved.fetch_add(1);
+        ++blocksDone;
 
         gSynth.setParams(gParams[gParamIdx.load(std::memory_order_acquire)]);
         dsp::NoteEvent ev;
@@ -87,10 +90,11 @@ void renderTask(void*) {
             blk[i] = (int16_t)s;
         }
 
-        if (!spk.playRaw(blk, cfg::kBlockSamples, cfg::kSampleRate, false, 1,
-                         cfg::kAudioChannel, false)) {
-            gStarved.fetch_add(1);
-        }
+        // NOTE: playRaw returns true even on its internal early-outs and
+        // blocks (not fails) on a full queue — its return value is not a
+        // health signal. The isPlaying()==0 check above is.
+        spk.playRaw(blk, cfg::kBlockSamples, cfg::kSampleRate, false, 1,
+                    cfg::kAudioChannel, false);
         b = (b + 1) % cfg::kNumBlockBufs;
     }
 }
@@ -127,11 +131,19 @@ bool begin() {
     }
     spk.setVolume(255);  // gain lives in DSP; keep the M5 mixer at unity
 
-    // Probe the actual playRaw path before claiming success.
+    // Probe the actual playRaw path before claiming success. playRaw's
+    // return value lies on failure paths (verified in Speaker_Class.cpp),
+    // so the real assertion is isRunning(): the spk task spun up and took
+    // the wav. Both checked.
     static int16_t probe[cfg::kBlockSamples] = {0};
     if (!spk.playRaw(probe, cfg::kBlockSamples, cfg::kSampleRate, false, 1,
                      cfg::kAudioChannel, false)) {
         gError = "probe playRaw() rejected";
+        return false;
+    }
+    delay(10);  // give the lazily-created spk task a beat to start
+    if (!spk.isRunning()) {
+        gError = "speaker task did not start (isRunning false)";
         return false;
     }
 

@@ -73,7 +73,7 @@ void drawStatus(M5Canvas& c) {
     if (keys::quickEditActive()) {
         c.fillRect(0, 0, cfg::kScreenW, kStatusH, theme::kAmberDim);
         c.setTextColor(theme::kBg, theme::kAmberDim);
-        c.drawString("-- EDIT --  1-0 select   [ ] adjust   - = coarse", 4, 2);
+        c.drawString("-- EDIT --  1-0 select  [ ] adjust", 4, 2);  // 35ch = 210px
         return;
     }
 
@@ -88,8 +88,8 @@ void drawStatus(M5Canvas& c) {
              dsp::kScales[cf.layout.scaleIdx].shortName, cf.layout.scaleLock ? "" : "*");
     c.drawString(buf, 44, 2);
 
-    snprintf(buf, sizeof buf, "OCT %d", cf.layout.octave);
-    c.drawString(buf, 112, 2);
+    snprintf(buf, sizeof buf, "OCT%d", cf.layout.octave);
+    c.drawString(buf, 100, 2);  // ends at 124: clears HOLD (right edge 134-158)
 
     // annunciators, right side
     int x = cfg::kScreenW - 4;
@@ -191,11 +191,13 @@ void drawBottom(M5Canvas& c) {
              dsp::waveformName(s.wave),
              s.glideMode == dsp::GlideMode::LegatoOnly ? "legato" : "always");
     c.drawString(buf, 4, kBottomY);
+    // compact: worst case "CUT 12.0k VOL 100 BND 12" = 24ch = 144px,
+    // safely clear of the mini grid-map starting at x=166
     if (s.cutoffHz >= 1000.f)
-        snprintf(buf, sizeof buf, "CUT %.1fk  VOL %d%%  BND %dst", s.cutoffHz / 1000.f,
+        snprintf(buf, sizeof buf, "CUT %.1fk VOL %d BND %d", s.cutoffHz / 1000.f,
                  (int)(s.masterVol * 100), cf.bendRange);
     else
-        snprintf(buf, sizeof buf, "CUT %d  VOL %d%%  BND %dst", (int)s.cutoffHz,
+        snprintf(buf, sizeof buf, "CUT %d VOL %d BND %d", (int)s.cutoffHz,
                  (int)(s.masterVol * 100), cf.bendRange);
     c.drawString(buf, 4, kBottomY + 10);
 
@@ -230,7 +232,7 @@ void drawHint(M5Canvas& c) {
         c.drawString("release fn to play", 4, kHintY);
     } else {
         c.setTextColor(theme::kDim, theme::kBg);
-        c.drawString("fn edit   tab setup   shift chrom   ` exit", 4, kHintY);
+        c.drawString("fn edit  tab setup  shift chrom  ` exit", 2, kHintY);  // 40ch=240px @x2
     }
 }
 

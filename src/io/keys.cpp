@@ -465,6 +465,9 @@ Actions poll(uint32_t nowMs) {
     return act;
 }
 
+// Known limit: if the synth steals a sustained note's voice at the cap
+// (free mode), the key layer isn't told — that key stays lit on the grid
+// map until its Off/panic. Display-only; audio is always correct.
 bool noteHeld(int string, int col) {
     for (int cd = 0; cd < 56; ++cd) {
         const HeldNote& n = gNotes[cd];
