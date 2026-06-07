@@ -112,6 +112,8 @@ int main() {
     // ---- staccato never squats in the pool (constant-rate release) -------
     // A note released early in its attack must free its voice in millis,
     // not sit silently for the full releaseS exhausting the pool.
+    s.handleEvent(NoteEvent::make(NoteEvent::AllOff, 0, 0xFF, false, 0.f));
+    peakOf(s, 20);  // drain the previous section's voices completely
     p = SynthParams();
     p.attackS = 2.f;     // long attack: 1 block in -> level ~0.002
     p.releaseS = 0.25f;
@@ -121,6 +123,8 @@ int main() {
     s.handleEvent(NoteEvent::make(NoteEvent::Off, 20, 0xFF, false, 0.f));
     peakOf(s, 3);        // 12 ms — proportional release frees it here
     CHECK(s.activeVoices() == 0, "staccato release frees the voice quickly");
+    p = SynthParams();   // restore defaults for the sections below
+    s.setParams(p);
 
     // ---- panic ------------------------------------------------------------
     s.handleEvent(NoteEvent::make(NoteEvent::AllOff, 0, 0xFF, false, 0.f));

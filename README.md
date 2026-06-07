@@ -108,7 +108,9 @@ single note gliding up an octave, played through the synth itself) → play.
 ## Before you trust it: the Phase 0 probe
 
 Two hardware assumptions need validating on *your* unit before the
-instrument's behavior can be trusted. The probe firmware tests both:
+instrument's behavior can be trusted. The probe firmware tests both —
+flash it the same way as the instrument (copy `dist/GLIDE-probe.bin` to
+`/apps/` on the SD for Launcher), or direct:
 
 ```
 pio run -e phase0-probe -t upload
