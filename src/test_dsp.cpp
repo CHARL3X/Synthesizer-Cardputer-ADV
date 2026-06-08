@@ -190,6 +190,7 @@ int main() {
     for (int i = 0; i < kPatchCount; ++i) {
         CHECK(bank[i].name[0] != '\0', "patch has a name");
         CHECK(bank[i].tiltDepth >= 0.f && bank[i].tiltDepth <= 1.f, "tilt depth in range");
+        CHECK(bank[i].tiltDepthB >= 0.f && bank[i].tiltDepthB <= 1.f, "tilt depth B in range");
         for (int j = 0; j < i; ++j)
             CHECK(strcmp(bank[i].name, bank[j].name) != 0, "patch names unique");
 

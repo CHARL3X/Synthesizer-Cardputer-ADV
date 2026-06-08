@@ -32,37 +32,62 @@ bool gPrevValid = false;
 
 float gScopeBuf[512];
 
+// Add one tilt axis's contribution into the three mod accumulators. Cutoff is
+// additive (octaves), vibrato additive (cents); volume is multiplicative (a
+// swell), so two volume routes compound — floored by the caller. oneSided:
+// axis A vibrato only leans one way ("forward to sing"); axis B (roll) is
+// symmetric, so a roll either direction adds vibrato.
+void accumTilt(store::TiltRoute route, float v, float depth, bool oneSided,
+               float& cutOct, float& vibCents, float& volMul) {
+    switch (route) {
+        case store::TiltRoute::Cutoff:  // the wah
+            cutOct += v * 2.f * depth;
+            break;
+        case store::TiltRoute::Vibrato:
+            vibCents += (oneSided ? (v > 0.f ? v : 0.f) : fabsf(v)) * 80.f * depth;
+            break;
+        case store::TiltRoute::Volume:  // the swell pedal
+            volMul *= 1.f - depth * 0.9f * (0.5f - v * 0.5f);
+            break;
+        default:
+            break;
+    }
+}
+
 void applyTilt() {
     auto& c = store::get();
     auto& s = c.synth;
-    if (c.tiltOn && c.tiltRoute != store::TiltRoute::Off && tilt::available()) {
-        tilt::poll();
-        const float v = tilt::value();  // center-calibrated -1..+1
-        const float d = c.tiltDepth;    // per-patch personality depth
-        switch (c.tiltRoute) {
-            case store::TiltRoute::Cutoff:  // the wah
-                s.cutoffModOct = v * 2.f * d;
-                s.vibratoCents = 0.f;
-                s.volMod = 1.f;
-                break;
-            case store::TiltRoute::Vibrato:  // lean forward to sing
-                s.vibratoCents = (v > 0.f ? v : 0.f) * 80.f * d;
-                s.cutoffModOct = 0.f;
-                s.volMod = 1.f;
-                break;
-            case store::TiltRoute::Volume:  // the swell pedal
-                s.volMod = 1.f - d * 0.9f * (0.5f - v * 0.5f);
-                s.cutoffModOct = 0.f;
-                s.vibratoCents = 0.f;
-                break;
-            default:
-                break;
+    float cutOct = 0.f, vibCents = 0.f, volMul = 1.f;
+
+    // Guard on enabled+available only — axis A may be Off while roll (B) is
+    // active, so the per-route switch (not this guard) handles Off.
+    if (c.tiltOn && tilt::available()) {
+        tilt::poll();  // updates both axes in one IMU read
+
+        // mod-latch: freeze the per-axis readings on the rising edge so the
+        // player can set a timbre and then lay the device flat.
+        static bool prevLatched = false;
+        static float latchedA = 0.f, latchedB = 0.f;
+        const bool latched = keys::tiltLatched();
+        if (latched && !prevLatched) {
+            latchedA = tilt::value();
+            latchedB = tilt::valueB();
         }
-    } else {
-        s.cutoffModOct = 0.f;
-        s.vibratoCents = 0.f;
-        s.volMod = 1.f;
+        prevLatched = latched;
+
+        const float vA = latched ? latchedA : tilt::value();
+        accumTilt(c.tiltRoute, vA, c.tiltDepth, true, cutOct, vibCents, volMul);
+        if (c.tiltDual) {
+            const float vB = latched ? latchedB : tilt::valueB();
+            accumTilt(c.tiltRouteB, vB, c.tiltDepthB, false, cutOct, vibCents, volMul);
+        }
+        if (cutOct > 3.f) cutOct = 3.f;
+        if (cutOct < -3.f) cutOct = -3.f;
+        if (volMul < 0.1f) volMul = 0.1f;  // two volume routes can't hit silence
     }
+    s.cutoffModOct = cutOct;
+    s.vibratoCents = vibCents;
+    s.volMod = volMul;
 }
 
 void drawStatus(M5Canvas& c) {
@@ -103,8 +128,12 @@ void drawStatus(M5Canvas& c) {
     c.setTextColor(l.held > 0 ? theme::kGreen : theme::kDim, theme::kPanel);
     c.drawString(buf, x, 2);
     x -= 48;
-    c.setTextColor(cf.tiltOn ? theme::kGreen : theme::kLine, theme::kPanel);
-    c.drawString("TILT", x, 2);
+    // TILT annunciator carries mode + latch: dim=off, green=on, amber=mod-
+    // latched; a trailing "2" means the roll axis (dual) is live too.
+    const bool latched = cf.tiltOn && keys::tiltLatched();
+    c.setTextColor(!cf.tiltOn ? theme::kLine : (latched ? theme::kAmber : theme::kGreen),
+                   theme::kPanel);
+    c.drawString(cf.tiltOn && cf.tiltDual ? "TILT2" : "TILT", x, 2);
     x -= 30;
     if (keys::holdLatched()) {
         c.setTextColor(theme::kAmber, theme::kPanel);

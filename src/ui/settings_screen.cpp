@@ -83,6 +83,30 @@ void fOctGlide(char* o, int c) {
 }
 void aOctGlide(int) { store::get().octaveGlide = !store::get().octaveGlide; }
 
+void fDroneVoice(char* o, int c) {
+    const uint8_t v = store::get().droneVoicing;
+    snprintf(o, c, "%s", v == 0 ? "single" : (v == 1 ? "+ octave" : "+ fifth"));
+}
+void aDroneVoice(int d) {
+    auto& g = store::get();
+    g.droneVoicing = (uint8_t)clampT((int)g.droneVoicing + d, 0, 2);
+}
+
+void fJamMotion(char* o, int c) {
+    const uint8_t m = store::get().jamMotion;
+    snprintf(o, c, "%s", m == 0 ? "sustained" : (m == 1 ? "pulse" : "arp"));
+}
+void aJamMotion(int d) {
+    auto& g = store::get();
+    g.jamMotion = (uint8_t)clampT((int)g.jamMotion + d, 0, 2);
+}
+
+void fJamBpm(char* o, int c) { snprintf(o, c, "%d bpm", store::get().jamBpm); }
+void aJamBpm(int d) {
+    auto& g = store::get();
+    g.jamBpm = (uint16_t)clampT((int)g.jamBpm + d * 4, 40, 240);
+}
+
 void fTilt(char* o, int c) { snprintf(o, c, "%s", store::tiltRouteName(store::get().tiltRoute)); }
 void aTilt(int d) {
     auto& g = store::get();
@@ -96,18 +120,33 @@ void aTiltDepth(int d) {
     g.tiltDepth = clampT(g.tiltDepth + d * 0.05f, 0.f, 1.f);
 }
 
+void fTiltB(char* o, int c) { snprintf(o, c, "%s", store::tiltRouteName(store::get().tiltRouteB)); }
+void aTiltB(int d) {
+    auto& g = store::get();
+    g.tiltRouteB = (store::TiltRoute)(((int)g.tiltRouteB + d + (int)store::TiltRoute::Count) %
+                                      (int)store::TiltRoute::Count);
+}
+
+void fTiltDepthB(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().tiltDepthB * 100)); }
+void aTiltDepthB(int d) {
+    auto& g = store::get();
+    g.tiltDepthB = clampT(g.tiltDepthB + d * 0.05f, 0.f, 1.f);
+}
+
 void fTiltCenter(char* o, int c) {
     snprintf(o, c, "%+d (set: , /)", (int)(store::get().tiltCenter * 100));
 }
 void aTiltCenter(int) {
-    // capture how you're holding it RIGHT NOW as "flat". The reading is
-    // one-pole smoothed (15%/step), so converge before trusting it —
-    // a single poll would capture stale history from before this screen.
+    // capture how you're holding it RIGHT NOW as "flat" — BOTH axes at once,
+    // one gesture. The reading is one-pole smoothed (15%/step), so converge
+    // before trusting it; a single poll would capture stale history.
     for (int i = 0; i < 30; ++i) {
         tilt::poll();
         delay(2);
     }
-    store::get().tiltCenter = tilt::raw();
+    auto& g = store::get();
+    g.tiltCenter = tilt::raw();
+    g.tiltCenterB = tilt::rawB();
 }
 
 void fPatchReset(char* o, int c) {
@@ -152,9 +191,14 @@ const Item kItems[] = {
     {"Glide mode", fGlideMode, aGlideMode},
     {"Allocation", fStringMode, aStringMode},
     {"Jam rows (drones)", fJamRows, aJamRows},
+    {"Drone voicing", fDroneVoice, aDroneVoice},
+    {"Jam motion", fJamMotion, aJamMotion},
+    {"Jam tempo", fJamBpm, aJamBpm},
     {"Octave keys", fOctGlide, aOctGlide},
-    {"Tilt routing", fTilt, aTilt},
-    {"Tilt depth", fTiltDepth, aTiltDepth},
+    {"Tilt f/b route", fTilt, aTilt},
+    {"Tilt f/b depth", fTiltDepth, aTiltDepth},
+    {"Tilt l/r route", fTiltB, aTiltB},
+    {"Tilt l/r depth", fTiltDepthB, aTiltDepthB},
     {"Tilt center", fTiltCenter, aTiltCenter},
     {"Sound reset", fPatchReset, aPatchReset},
     {"Bend time", fBendMs, aBendMs},

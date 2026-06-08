@@ -40,8 +40,14 @@ constexpr const char* kNvsNamespace = "glide";
 // ---- tilt (BMI270) ----------------------------------------------------
 // Which accel axis maps to the mod value, and its sign. Set during bring-up;
 // flip kTiltSign if "tilt toward you" feels backwards on the real device.
-constexpr int   kTiltAxis  = 1;     // 0=x 1=y 2=z
+constexpr int   kTiltAxis  = 1;     // 0=x 1=y 2=z  — forward/back (axis A)
 constexpr float kTiltSign  = 1.0f;
+// Second axis: left/right roll (axis B). VERIFY on hardware — axis index and
+// sign are best-guess (x, in-plane orthogonal to fwd/back); flip kTiltSignB
+// if "roll right" drives the mod backwards, or change kTiltAxisB if it turns
+// out the roll plane maps to a different accel channel.
+constexpr int   kTiltAxisB = 0;     // 0=x 1=y 2=z  — left/right roll
+constexpr float kTiltSignB = 1.0f;
 constexpr float kTiltSmooth = 0.15f; // per-frame smoothing toward raw reading
 
 }  // namespace cfg

@@ -65,8 +65,18 @@ struct HeldNote {
     int8_t col = -1;
     bool chromAtPress = false;  // captured at press: shift never repitches
     float pitch = 0.f;
+    int8_t droneVoicing = 0;    // semitone of the drone's partner voice
+                                // (0 = single note, 7 = fifth, 12 = octave)
 };
 HeldNote gNotes[56];
+
+// A fat drone is two voices on one key: the primary (id = cd) plus a partner
+// (id = cd + this offset). Key codes are 0..55, so +64 can never collide with
+// another key's primary id, and stays inside uint8_t.
+constexpr int kDroneStackOffset = 64;
+inline int droneIntervalFor(uint8_t voicing) {
+    return voicing == 2 ? 7 : (voicing == 1 ? 12 : 0);  // 0=single 1=oct 2=fifth
+}
 
 inline bool sounding(const HeldNote& n) {
     return n.string >= 0 && (n.physical || n.sustained || n.drone);
@@ -82,6 +92,19 @@ uint32_t gLastPollMs = 0;
 float gBendCents = 0.f;
 bool gHoldLatch = false;
 bool gSustainHeld = false;
+
+// tilt key (enter): short tap cycles off->single->dual->off, long-press
+// toggles the mod-latch. Fired on RELEASE so the two gestures don't collide.
+bool gTiltLatched = false;
+uint32_t gTiltPressMs = 0;
+bool gTiltLatchFired = false;            // long-press consumed this hold
+constexpr uint32_t kTiltLongMs = 350;
+
+// jam motion: a millis-paced beat clock on the UI thread re-strikes the
+// latched drones, turning the static bed into a living backing. Pure event
+// pushes through the existing queue — the dsp/ engine stays untouched.
+uint32_t gLastBeatMs = 0;
+int gArpIdx = 0;
 
 // quick-edit
 bool gQuickEdit = false;
@@ -120,6 +143,8 @@ void lanePush(int lane, uint8_t cd) {
 
 // ---- note on/off -----------------------------------------------------------
 void sendOff(int cd);
+void sendDroneOff(int cd);
+void restrikeDrone(int cd);
 
 void notePress(int cd, bool shiftHeld) {
     auto& cfgr = store::get();
@@ -128,8 +153,7 @@ void notePress(int cd, bool shiftHeld) {
     // jam rows: tap to latch a drone, tap again to let it fade
     if (gGridString[cd] < cfgr.jamRows) {
         if (n.drone && n.string >= 0) {  // second tap: release the drone
-            sendOff(cd);
-            n.drone = false;
+            sendDroneOff(cd);
             return;
         }
         n.physical = true;
@@ -139,10 +163,9 @@ void notePress(int cd, bool shiftHeld) {
         n.col = gGridCol[cd];
         n.chromAtPress = shiftHeld || !cfgr.layout.scaleLock;
         n.pitch = pitchFor(n);
-        dsp::NoteEvent ev =
-            dsp::NoteEvent::make(dsp::NoteEvent::On, (uint8_t)cd, 0xFF, false, n.pitch);
-        ev.drone = true;  // exempt from the cap and from chord-slide stealing
-        audio::pushEvent(ev);
+        // one key voices a fuller backing: the partner sits a fifth/octave up
+        n.droneVoicing = (int8_t)droneIntervalFor(cfgr.droneVoicing);
+        restrikeDrone(cd);  // fires primary (+ partner) as drone voices
         return;
     }
 
@@ -169,7 +192,33 @@ void sendOff(int cd) {
     gNotes[cd].physical = false;
     gNotes[cd].sustained = false;
     gNotes[cd].drone = false;
+    gNotes[cd].droneVoicing = 0;
     gNotes[cd].string = -1;
+}
+
+// Fire a drone's voices: the primary plus, for a fat voicing, its partner a
+// fifth/octave up. Both flagged drone -> cap-exempt and steal-proof. Used by
+// both the initial latch and the jam-motion re-strikes.
+void restrikeDrone(int cd) {
+    HeldNote& n = gNotes[cd];
+    dsp::NoteEvent ev = dsp::NoteEvent::make(dsp::NoteEvent::On, (uint8_t)cd, 0xFF, false, n.pitch);
+    ev.drone = true;
+    audio::pushEvent(ev);
+    if (n.droneVoicing > 0) {
+        dsp::NoteEvent ev2 = dsp::NoteEvent::make(
+            dsp::NoteEvent::On, (uint8_t)(cd + kDroneStackOffset), 0xFF, false,
+            n.pitch + n.droneVoicing);
+        ev2.drone = true;
+        audio::pushEvent(ev2);
+    }
+}
+
+// Release a latched drone and its partner voice together.
+void sendDroneOff(int cd) {
+    if (gNotes[cd].droneVoicing > 0)
+        audio::pushEvent(
+            dsp::NoteEvent::make(dsp::NoteEvent::Off, (uint8_t)(cd + kDroneStackOffset)));
+    sendOff(cd);
 }
 
 void noteRelease(int cd) {
@@ -253,6 +302,10 @@ void retuneHeldNotes() {
         audio::pushEvent(
             dsp::NoteEvent::make(dsp::NoteEvent::Retarget, (uint8_t)cd, (uint8_t)n.string,
                                  false, n.pitch));
+        if (n.drone && n.droneVoicing > 0)  // sweep the drone's partner too
+            audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Retarget,
+                                                  (uint8_t)(cd + kDroneStackOffset), 0xFF, false,
+                                                  n.pitch + n.droneVoicing));
     }
 }
 
@@ -272,6 +325,14 @@ void octaveShift(int dir) {
             HeldNote& n = gNotes[cd];
             if (!sounding(n)) continue;
             n.pitch = pitchFor(n);
+            if (n.drone) {  // keep the drone (and its partner) a drone
+                if (n.droneVoicing > 0)
+                    audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off,
+                                                          (uint8_t)(cd + kDroneStackOffset)));
+                audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, (uint8_t)cd));
+                restrikeDrone(cd);
+                continue;
+            }
             audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, (uint8_t)cd));
             audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::On, (uint8_t)cd,
                                                   (uint8_t)n.string, false, n.pitch));
@@ -281,6 +342,82 @@ void octaveShift(int dir) {
     snprintf(v, sizeof v, "%d", next);
     hud::show("OCTAVE", v, (next - 1) / 6.f);
     store::markDirty();
+}
+
+// ---- tilt mode cycle --------------------------------------------------------
+// enter short-tap: off -> single (axis A) -> dual (A + roll B) -> off. Entering
+// an active state self-heals a missing route/depth so it's never a dead toggle.
+void cycleTilt() {
+    auto& cfgr = store::get();
+    if (!cfgr.tiltOn) {
+        cfgr.tiltOn = true;
+        cfgr.tiltDual = false;
+    } else if (!cfgr.tiltDual) {
+        cfgr.tiltDual = true;
+    } else {
+        cfgr.tiltOn = false;
+        cfgr.tiltDual = false;
+        gTiltLatched = false;  // a frozen mod is meaningless once tilt is off
+    }
+    if (cfgr.tiltOn) {
+        if (cfgr.tiltRoute == store::TiltRoute::Off) cfgr.tiltRoute = store::TiltRoute::Cutoff;
+        if (cfgr.tiltDepth < 0.05f) cfgr.tiltDepth = 0.6f;
+        if (cfgr.tiltDual) {
+            if (cfgr.tiltRouteB == store::TiltRoute::Off) cfgr.tiltRouteB = store::TiltRoute::Cutoff;
+            if (cfgr.tiltDepthB < 0.05f) cfgr.tiltDepthB = 0.6f;
+        }
+    }
+    char v[24];
+    if (!cfgr.tiltOn) {
+        hud::show("TILT", "off", -1.f);
+    } else if (!cfgr.tiltDual) {
+        snprintf(v, sizeof v, "%s %d%%", store::tiltRouteName(cfgr.tiltRoute),
+                 (int)(cfgr.tiltDepth * 100));
+        hud::show("TILT", v, cfgr.tiltDepth);
+    } else {
+        snprintf(v, sizeof v, "%s + %s", store::tiltRouteName(cfgr.tiltRoute),
+                 store::tiltRouteName(cfgr.tiltRouteB));
+        hud::show("TILT 2D", v, cfgr.tiltDepthB);
+    }
+    store::markDirty();
+}
+
+// ---- jam motion -------------------------------------------------------------
+// Collect the latched drones, sorted low->high so an arp rolls musically.
+int collectDrones(int* out) {
+    int n = 0;
+    for (int cd = 0; cd < 56; ++cd)
+        if (gNotes[cd].drone && gNotes[cd].string >= 0) out[n++] = cd;
+    for (int i = 1; i < n; ++i) {  // insertion sort by pitch (n is small)
+        const int key = out[i];
+        const float kp = gNotes[key].pitch;
+        int j = i - 1;
+        while (j >= 0 && gNotes[out[j]].pitch > kp) { out[j + 1] = out[j]; --j; }
+        out[j + 1] = key;
+    }
+    return n;
+}
+
+void jamTick(uint32_t nowMs) {
+    auto& cfgr = store::get();
+    if (cfgr.jamMotion == 0 || cfgr.jamRows == 0) { gLastBeatMs = 0; return; }
+    int drones[56];
+    const int nd = collectDrones(drones);
+    if (nd == 0) { gLastBeatMs = 0; gArpIdx = 0; return; }
+
+    const uint32_t beatMs = 60000u / (cfgr.jamBpm < 20 ? 20 : cfgr.jamBpm);
+    if (gLastBeatMs == 0) { gLastBeatMs = nowMs; return; }  // start the clock cleanly
+    if (nowMs - gLastBeatMs < beatMs) return;
+    gLastBeatMs += beatMs;                                  // steady phase, no drift
+    if (nowMs - gLastBeatMs > beatMs) gLastBeatMs = nowMs;  // resync if we fell far behind
+
+    if (cfgr.jamMotion == 1) {            // pulse: re-strike the whole chord
+        for (int i = 0; i < nd; ++i) restrikeDrone(drones[i]);
+    } else {                              // arp: one drone per beat, low->high
+        gArpIdx %= nd;
+        restrikeDrone(drones[gArpIdx]);
+        gArpIdx = (gArpIdx + 1) % nd;
+    }
 }
 
 // ---- quick-edit layer (hold fn, top row selects, [ ] adjusts) ---------------
@@ -358,6 +495,12 @@ void resync() {
     M5Cardputer.update();
     gPrevMask = 0;
     for (const auto& p : M5Cardputer.Keyboard.keyList()) gPrevMask |= 1ULL << code(p.y, p.x);
+    // enter is settings' increment key; if it's held across the exit there's no
+    // fresh press edge, so mark the long-press already consumed — it won't
+    // latch (or cycle on release) until enter is released and pressed anew.
+    gTiltLatchFired = true;
+    gLastBeatMs = 0;  // restart the jam clock cleanly after the blocking screen
+    gArpIdx = 0;
     clearLeadNotes();  // drones ride through settings trips
 }
 
@@ -468,26 +611,12 @@ Actions poll(uint32_t nowMs) {
                           -1.f);
                 store::markDirty();
                 break;
-            case kKeyTilt: {
-                cfgr.tiltOn = !cfgr.tiltOn;
-                // never a dead toggle: turning tilt ON with no route (or no
-                // depth) self-heals to a sensible wah instead of doing
-                // nothing until a settings trip
-                if (cfgr.tiltOn) {
-                    if (cfgr.tiltRoute == store::TiltRoute::Off)
-                        cfgr.tiltRoute = store::TiltRoute::Cutoff;
-                    if (cfgr.tiltDepth < 0.05f) cfgr.tiltDepth = 0.6f;
-                }
-                char v[20];
-                if (cfgr.tiltOn)
-                    snprintf(v, sizeof v, "%s %d%%", store::tiltRouteName(cfgr.tiltRoute),
-                             (int)(cfgr.tiltDepth * 100));
-                else
-                    snprintf(v, sizeof v, "off");
-                hud::show("TILT", v, cfgr.tiltOn ? cfgr.tiltDepth : -1.f);
-                store::markDirty();
+            case kKeyTilt:
+                // decide short-tap (cycle) vs long-press (latch) on release /
+                // hold-threshold, not here — just stamp the press
+                gTiltPressMs = nowMs;
+                gTiltLatchFired = false;
                 break;
-            }
             default:
                 break;
         }
@@ -501,6 +630,24 @@ Actions poll(uint32_t nowMs) {
             continue;
         }
         if (cd == kKeyBendDown || cd == kKeyBendUp) gRepeatDir = 0;
+        // tilt key released: if the long-press latch didn't fire, it was a
+        // short tap -> cycle the tilt mode
+        if (cd == kKeyTilt && !gTiltLatchFired) cycleTilt();
+    }
+
+    // tilt key held past the long-press threshold -> toggle the mod-latch
+    // (fires once per hold; release then skips the cycle)
+    if (held(cur, kKeyTilt) && !gTiltLatchFired && nowMs - gTiltPressMs >= kTiltLongMs) {
+        gTiltLatched = !gTiltLatched;
+        gTiltLatchFired = true;
+        // a latch needs tilt running to hold anything — turn it on (single)
+        if (!cfgr.tiltOn) {
+            cfgr.tiltOn = true;
+            if (cfgr.tiltRoute == store::TiltRoute::Off) cfgr.tiltRoute = store::TiltRoute::Cutoff;
+            if (cfgr.tiltDepth < 0.05f) cfgr.tiltDepth = 0.6f;
+            store::markDirty();
+        }
+        hud::show("TILT", gTiltLatched ? "latched" : "live", -1.f);
     }
 
     // sustain pedal lifted -> let go of everything not physically held
@@ -538,6 +685,8 @@ Actions poll(uint32_t nowMs) {
         if (gBendCents < bendTarget) gBendCents = bendTarget;
     }
     cfgr.synth.bendCents = gBendCents;
+
+    jamTick(nowMs);  // living backing: re-strike latched drones on the beat
 
     gPrevMask = cur;
     return act;
@@ -584,5 +733,6 @@ void quickParamValue(int idx, char* out, int cap) {
 float bendCentsNow() { return gBendCents; }
 bool holdLatched() { return gHoldLatch; }
 bool sustainActive() { return gSustainHeld || gHoldLatch; }
+bool tiltLatched() { return gTiltLatched; }
 
 }  // namespace keys

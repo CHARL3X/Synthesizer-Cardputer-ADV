@@ -22,18 +22,59 @@ T clampT(T v, T lo, T hi) {
 
 // Patch override blob. Version-guarded: SynthParams layout changes make old
 // blobs invalid -> factory fallback, never garbage sound.
-constexpr uint8_t kPatchBlobVersion = 1;
-struct PatchBlob {
+//
+// v2 appended the roll-axis (tilt B) fields. The layout is APPEND-ONLY so a v1
+// blob can be migrated in place instead of discarded — a saved sound from
+// before the two-axis-tilt update keeps its synth + axis-A tilt, and just
+// gains a neutral (Off) roll axis. The on-flash size differs between versions,
+// so the loader accepts either size and disambiguates on the version byte.
+constexpr uint8_t kPatchBlobVersion = 2;
+
+struct PatchBlobV1 {  // frozen: byte-for-byte the original v1 layout
     uint8_t version;
     uint8_t tiltRoute;
     float tiltDepth;
     dsp::SynthParams synth;
 };
 
+struct PatchBlob {  // current (v2)
+    uint8_t version;
+    uint8_t tiltRoute;
+    float tiltDepth;
+    dsp::SynthParams synth;
+    uint8_t tiltRouteB;   // NEW in v2: roll-axis route
+    float tiltDepthB;     // NEW in v2: roll-axis depth
+};
+
 void patchKey(int slot, char* out) {
     out[0] = 'p';
     out[1] = (char)('0' + slot);
     out[2] = '\0';
+}
+
+// Read a slot's override, migrating a v1 blob forward. Returns true iff a
+// valid override exists (v1 or v2). Single source of truth for the three
+// call sites (mask scan, applyPatch, and the savePatch upgrade path).
+bool loadBlob(const char* key, PatchBlob& out) {
+    const size_t len = gPrefs.getBytesLength(key);
+    if (len == sizeof(PatchBlob)) {
+        if (gPrefs.getBytes(key, &out, sizeof out) == sizeof out && out.version == kPatchBlobVersion)
+            return true;
+        return false;
+    }
+    if (len == sizeof(PatchBlobV1)) {
+        PatchBlobV1 b1;
+        if (gPrefs.getBytes(key, &b1, sizeof b1) == sizeof b1 && b1.version == 1) {
+            out.version = kPatchBlobVersion;
+            out.tiltRoute = b1.tiltRoute;
+            out.tiltDepth = b1.tiltDepth;
+            out.synth = b1.synth;
+            out.tiltRouteB = (uint8_t)dsp::TiltRoute::Off;  // neutral, inert
+            out.tiltDepthB = 0.6f;
+            return true;
+        }
+    }
+    return false;
 }
 }  // namespace
 
@@ -45,17 +86,14 @@ void begin() {
     gPrefs.begin(cfg::kNvsNamespace, false);
     GlideConfig d;  // defaults
 
-    // scan override slots once; afterwards patchHasOverride is a bit test
+    // scan override slots once; afterwards patchHasOverride is a bit test.
+    // loadBlob counts both v1 and v2 saves as valid overrides (v1 migrates).
     gOverrideMask = 0;
     for (int i = 0; i < dsp::kPatchCount; ++i) {
         char key[3];
         patchKey(i, key);
-        if (gPrefs.getBytesLength(key) == sizeof(PatchBlob)) {
-            PatchBlob b;
-            if (gPrefs.getBytes(key, &b, sizeof b) == sizeof b &&
-                b.version == kPatchBlobVersion)
-                gOverrideMask |= (uint16_t)(1u << i);
-        }
+        PatchBlob b;
+        if (loadBlob(key, b)) gOverrideMask |= (uint16_t)(1u << i);
     }
 
     auto& s = gCfg.synth;
@@ -87,10 +125,18 @@ void begin() {
                                             (int)TiltRoute::Count - 1);
     gCfg.tiltDepth = clampT<int>(gPrefs.getInt("tiltdep", (int)(d.tiltDepth * 100)), 0, 100) / 100.f;
     gCfg.tiltCenter = clampT<int>(gPrefs.getInt("tiltctr", 0), -1000, 1000) / 1000.f;
+    gCfg.tiltRouteB = (TiltRoute)clampT<int>(gPrefs.getUChar("tiltrtb", (uint8_t)d.tiltRouteB), 0,
+                                             (int)TiltRoute::Count - 1);
+    gCfg.tiltDepthB = clampT<int>(gPrefs.getInt("tiltdepb", (int)(d.tiltDepthB * 100)), 0, 100) / 100.f;
+    gCfg.tiltCenterB = clampT<int>(gPrefs.getInt("tiltctrb", 0), -1000, 1000) / 1000.f;
     gCfg.tiltOn = gPrefs.getBool("tilton", d.tiltOn);
+    gCfg.tiltDual = gPrefs.getBool("tiltdual", d.tiltDual);
     gCfg.currentPatch = clampT<int>(gPrefs.getUChar("cpatch", d.currentPatch), 0,
                                     dsp::kPatchCount - 1);
     gCfg.jamRows = clampT<int>(gPrefs.getUChar("jamrows", d.jamRows), 0, 2);
+    gCfg.droneVoicing = clampT<int>(gPrefs.getUChar("dvoice", d.droneVoicing), 0, 2);
+    gCfg.jamMotion = clampT<int>(gPrefs.getUChar("jammot", d.jamMotion), 0, 2);
+    gCfg.jamBpm = clampT<int>(gPrefs.getUShort("jambpm", d.jamBpm), 40, 240);
     gCfg.bendMs = clampT<int>(gPrefs.getUShort("bendms", d.bendMs), 50, 1000);
     gCfg.bendRange = clampT<int>(gPrefs.getUChar("bendrg", d.bendRange), 1, 12);
     gCfg.bootSound = gPrefs.getBool("boot", d.bootSound);
@@ -124,9 +170,16 @@ void persistNow() {
     gPrefs.putUChar("tiltrt", (uint8_t)gCfg.tiltRoute);
     gPrefs.putInt("tiltdep", (int)(gCfg.tiltDepth * 100));
     gPrefs.putInt("tiltctr", (int)(gCfg.tiltCenter * 1000));
+    gPrefs.putUChar("tiltrtb", (uint8_t)gCfg.tiltRouteB);
+    gPrefs.putInt("tiltdepb", (int)(gCfg.tiltDepthB * 100));
+    gPrefs.putInt("tiltctrb", (int)(gCfg.tiltCenterB * 1000));
     gPrefs.putBool("tilton", gCfg.tiltOn);
+    gPrefs.putBool("tiltdual", gCfg.tiltDual);
     gPrefs.putUChar("cpatch", gCfg.currentPatch);
     gPrefs.putUChar("jamrows", gCfg.jamRows);
+    gPrefs.putUChar("dvoice", gCfg.droneVoicing);
+    gPrefs.putUChar("jammot", gCfg.jamMotion);
+    gPrefs.putUShort("jambpm", gCfg.jamBpm);
     gPrefs.putUShort("bendms", gCfg.bendMs);
     gPrefs.putUChar("bendrg", gCfg.bendRange);
     gPrefs.putBool("boot", gCfg.bootSound);
@@ -162,16 +215,19 @@ void applyPatch(int slot) {
     char key[3];
     patchKey(slot, key);
     PatchBlob b;
-    if (gPrefs.getBytesLength(key) == sizeof(PatchBlob) &&
-        gPrefs.getBytes(key, &b, sizeof b) == sizeof b && b.version == kPatchBlobVersion) {
+    if (loadBlob(key, b)) {
         gCfg.synth = b.synth;
         gCfg.tiltRoute = (TiltRoute)clampT<int>(b.tiltRoute, 0, (int)TiltRoute::Count - 1);
         gCfg.tiltDepth = clampT(b.tiltDepth, 0.f, 1.f);
+        gCfg.tiltRouteB = (TiltRoute)clampT<int>(b.tiltRouteB, 0, (int)TiltRoute::Count - 1);
+        gCfg.tiltDepthB = clampT(b.tiltDepthB, 0.f, 1.f);
     } else {
         const dsp::Patch& p = dsp::factoryPatches()[slot];
         gCfg.synth = p.synth;
         gCfg.tiltRoute = p.tiltRoute;
         gCfg.tiltDepth = p.tiltDepth;
+        gCfg.tiltRouteB = p.tiltRouteB;
+        gCfg.tiltDepthB = p.tiltDepthB;
     }
     gCfg.synth.bendCents = 0.f;  // live-mod fields never come from a patch
     gCfg.synth.vibratoCents = 0.f;
@@ -194,6 +250,8 @@ bool savePatch(int slot) {
     b.synth.vibratoCents = 0.f;
     b.synth.cutoffModOct = 0.f;
     b.synth.volMod = 1.f;
+    b.tiltRouteB = (uint8_t)gCfg.tiltRouteB;  // v2: roll axis travels with the slot
+    b.tiltDepthB = gCfg.tiltDepthB;
     char key[3];
     patchKey(slot, key);
     const bool ok = gPrefs.putBytes(key, &b, sizeof b) == sizeof b;

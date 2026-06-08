@@ -36,6 +36,7 @@ void quickParamValue(int idx, char* out, int cap);  // formatted current value
 float bendCentsNow();
 bool holdLatched();
 bool sustainActive();
+bool tiltLatched();  // mod-latch: tilt values frozen (long-press enter)
 
 // re-sync edge state after a blocking screen (settings) ate the keyboard
 void resync();

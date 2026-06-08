@@ -8,7 +8,9 @@ namespace tilt {
 
 void begin();
 bool available();
-void poll();      // call once per UI frame
-float value();    // smoothed, center-calibrated, -1..+1
-float raw();      // uncalibrated smoothed reading (for center capture)
+void poll();      // call once per UI frame — updates both axes in one IMU read
+float value();    // axis A (fwd/back): smoothed, center-calibrated, -1..+1
+float raw();      // axis A uncalibrated smoothed reading (for center capture)
+float valueB();   // axis B (left/right roll): center-calibrated, -1..+1
+float rawB();     // axis B uncalibrated smoothed reading
 }  // namespace tilt

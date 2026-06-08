@@ -16,8 +16,13 @@ void buildBank(Patch* P) {
     {
         Patch& p = P[0];
         setName(p, "GLIDE");
-        p.tiltRoute = TiltRoute::Cutoff;
-        p.tiltDepth = 0.6f;
+        // The default sound leads with vibrato (lean forward to sing), and its
+        // roll axis is a wah — so enabling dual mode on GLIDE gives the 2D
+        // body (vibrato + filter) immediately, the showcase for the feature.
+        p.tiltRoute = TiltRoute::Vibrato;
+        p.tiltDepth = 0.7f;
+        p.tiltRouteB = TiltRoute::Cutoff;
+        p.tiltDepthB = 0.6f;
         // synth = neutral defaults (saw, 4k cutoff, glide 120ms)
     }
     // w — WHISTLE: the digital slide whistle. Where this all started.
