@@ -8,9 +8,12 @@ namespace dsp {
 namespace {
 // Per-voice gain leaves headroom for 8 voices into the soft clipper.
 constexpr float kVoiceGain = 0.22f;
-constexpr float kFatGain = 0.45f;  // 3 oscillators summed
+constexpr float kFatGain = 0.45f;   // 3 oscillators summed
+constexpr float kPulseGain = 0.7f;  // saw-difference pulse peaks ~1.8 at thin widths
 constexpr float kMinAttackS = 0.001f;
 constexpr float kMinSegS = 0.002f;
+constexpr float kTwoPi = 6.28318530718f;
+constexpr float kPwmRateHz = 0.6f;  // slow width sweep — the classic PWM shimmer
 
 inline uint32_t freqToInc(float freq, float sr) {
     return (uint32_t)(freq / sr * 4294967296.f);
@@ -84,7 +87,18 @@ void Voice::render(float* out, int n, const SynthParams& p, float centsOffset) {
     curPitch_ = newPitch;
 
     const bool fat = (p.wave == Waveform::FatSaw);
+    const bool pulse = (p.wave == Waveform::Pulse);
     const float* tbl = tableFor(p.wave, f1);
+
+    // Pulse = saw(ph) - saw(ph + width): band-limited PWM from the existing
+    // saw tables, zero DC at any width. The width breathes under a slow LFO.
+    uint32_t pwOff = 0;
+    if (pulse) {
+        pwmPhase_ += kTwoPi * kPwmRateHz * blockDur;
+        if (pwmPhase_ > kTwoPi) pwmPhase_ -= kTwoPi;
+        const float pw = 0.5f + 0.4f * sinf(pwmPhase_);  // 10%..90%
+        pwOff = (uint32_t)(pw * 4294967296.f);
+    }
 
     // linear phase-increment ramp across the block = smooth intra-block glide
     float inc0 = (float)freqToInc(f0, sr_);
@@ -143,6 +157,7 @@ void Voice::render(float* out, int n, const SynthParams& p, float centsOffset) {
 
         const uint32_t ui = (uint32_t)inc;
         float s = tableRead(tbl, ph_[0]);
+        if (pulse) s = (s - tableRead(tbl, ph_[0] + pwOff)) * kPulseGain;
         ph_[0] += ui;
         if (fat) {
             s += tableRead(tbl, ph_[1]) + tableRead(tbl, ph_[2]);

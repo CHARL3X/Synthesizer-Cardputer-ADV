@@ -18,7 +18,8 @@ extern float gTables[TblCount][kTableSize + 1];
 
 void initWavetables();  // call once before rendering
 
-// Table for a waveform at a given fundamental (FatSaw reads the saw tables).
+// Table for a waveform at a given fundamental (FatSaw and Pulse read the saw
+// tables — Pulse is the difference of two saw reads, so it stays band-limited).
 inline const float* tableFor(Waveform w, float freq) {
     switch (w) {
         case Waveform::Sine:     return gTables[TblSine];

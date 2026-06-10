@@ -8,7 +8,7 @@ namespace dsp {
 
 constexpr int kMaxVoices = 8;
 
-enum class Waveform : uint8_t { Sine, Triangle, Saw, Square, FatSaw, Count };
+enum class Waveform : uint8_t { Sine, Triangle, Saw, Square, FatSaw, Pulse, Count };
 enum class GlideMode : uint8_t {
     LegatoOnly,  // glide only when notes overlap — the skill-gap default
     Always,      // every transition portamentos (dreamier)
@@ -36,6 +36,7 @@ inline const char* waveformName(Waveform w) {
         case Waveform::Saw:      return "saw";
         case Waveform::Square:   return "sqr";
         case Waveform::FatSaw:   return "fat";
+        case Waveform::Pulse:    return "pwm";
         default:                 return "?";
     }
 }

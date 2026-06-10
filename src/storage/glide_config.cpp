@@ -139,6 +139,7 @@ void begin() {
     gCfg.jamBpm = clampT<int>(gPrefs.getUShort("jambpm", d.jamBpm), 40, 240);
     gCfg.bendMs = clampT<int>(gPrefs.getUShort("bendms", d.bendMs), 50, 1000);
     gCfg.bendRange = clampT<int>(gPrefs.getUChar("bendrg", d.bendRange), 1, 12);
+    gCfg.scopeMode = clampT<int>(gPrefs.getUChar("scopemd", d.scopeMode), 0, 1);
     gCfg.bootSound = gPrefs.getBool("boot", d.bootSound);
     gCfg.seenIntro = gPrefs.getBool("intro", d.seenIntro);
 }
@@ -182,6 +183,7 @@ void persistNow() {
     gPrefs.putUShort("jambpm", gCfg.jamBpm);
     gPrefs.putUShort("bendms", gCfg.bendMs);
     gPrefs.putUChar("bendrg", gCfg.bendRange);
+    gPrefs.putUChar("scopemd", gCfg.scopeMode);
     gPrefs.putBool("boot", gCfg.bootSound);
     gPrefs.putBool("intro", gCfg.seenIntro);
     gDirty = false;

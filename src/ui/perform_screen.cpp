@@ -32,6 +32,14 @@ bool gPrevValid = false;
 
 float gScopeBuf[512];
 
+// pitch trail: lead pitch sampled once per frame, scrolling right-to-left
+// (~7.5 s across the screen at 30 fps). NAN = silence gap.
+float gTrail[kTraceW];
+int gTrailPos = 0;
+bool gTrailInit = false;
+float gTrailCenter = 69.f;  // view center in MIDI, follows the lead slowly
+bool gTrailCenterSet = false;
+
 // Add one tilt axis's contribution into the three mod accumulators. Cutoff is
 // additive (octaves), vibrato additive (cents); volume is multiplicative (a
 // swell), so two volume routes compound — floored by the caller. oneSided:
@@ -181,9 +189,84 @@ void drawEditPanel(M5Canvas& c) {
     }
 }
 
+// The pitch trail: the lead voice's pitch drawn over time. On an instrument
+// whose whole point is the space between the notes, this is the oscilloscope
+// for the *other* axis — every glide, hammer-on and bend is a visible curve.
+void drawPitchTrail(M5Canvas& c) {
+    if (!gTrailInit) {
+        for (int i = 0; i < kTraceW; ++i) gTrail[i] = NAN;
+        gTrailPos = 0;
+        gTrailCenterSet = false;
+        gTrailInit = true;
+    }
+
+    auto l = audio::lead();
+    float v = l.active ? l.pitchMidi : NAN;
+    if (l.active) {
+        if (!gTrailCenterSet) {
+            gTrailCenter = v;
+            gTrailCenterSet = true;
+        }
+        // the view drifts after the lead; snaps faster if it ran off-screen
+        const float d = v - gTrailCenter;
+        gTrailCenter += d * (fabsf(d) > 12.f ? 0.3f : 0.05f);
+    }
+    gTrail[gTrailPos] = v;
+    gTrailPos = (gTrailPos + 1) % kTraceW;
+
+    // 30-semitone window: ~2.5 octaves visible
+    const float pxPerSemi = (kScopeH - 4) / 30.f;
+    const int yTop = kScopeY, yBot = kScopeY + kScopeH - 1;
+    auto yOf = [&](float midi) {
+        int y = kScopeMid - (int)((midi - gTrailCenter) * pxPerSemi + 0.5f);
+        return y < yTop ? yTop : (y > yBot ? yBot : y);
+    };
+
+    // gridlines at every root pitch — the fret markers of the time axis
+    auto& cf = store::get();
+    const int root = cf.layout.rootSemis;
+    char nm[8];
+    c.setFont(&fonts::Font0);
+    for (int m = (int)gTrailCenter - 16; m <= (int)gTrailCenter + 16; ++m) {
+        if (((m % 12) + 12) % 12 != root) continue;
+        const int y = kScopeMid - (int)((m - gTrailCenter) * pxPerSemi + 0.5f);
+        if (y < yTop + 2 || y > yBot - 2) continue;
+        c.drawFastHLine(kTraceX, y, kTraceW, theme::kLine);
+        if (y + 10 <= yBot) {  // label sits under its line, inside the scope
+            snprintf(nm, sizeof nm, "%s%d", dsp::kNoteNames[root], m / 12 - 1);
+            c.setTextColor(theme::kDim, theme::kBg);
+            c.drawString(nm, kTraceX + 2, y + 2);
+        }
+    }
+
+    // the trace, oldest at the left edge
+    int prevY = 0;
+    bool prevValid = false;
+    for (int x = 0; x < kTraceW; ++x) {
+        const float m = gTrail[(gTrailPos + x) % kTraceW];
+        if (m != m) {  // NAN: a rest — break the line
+            prevValid = false;
+            continue;
+        }
+        const int y = yOf(m);
+        if (prevValid)
+            c.drawLine(kTraceX + x - 1, prevY, kTraceX + x, y, theme::kGreen);
+        else
+            c.drawPixel(kTraceX + x, y, theme::kGreen);
+        prevY = y;
+        prevValid = true;
+    }
+    // bright head where the pitch is right now
+    if (prevValid) c.fillRect(kTraceX + kTraceW - 2, prevY - 1, 3, 3, theme::kIdle);
+}
+
 void drawScope(M5Canvas& c, uint32_t now) {
     if (keys::quickEditActive()) {
         drawEditPanel(c);
+        return;
+    }
+    if (store::get().scopeMode == 1) {
+        drawPitchTrail(c);
         return;
     }
     // graticule
@@ -300,6 +383,24 @@ void drawBottom(M5Canvas& c) {
     }
 }
 
+// Low-battery warning: a pocket instrument that dies mid-jam without telling
+// you is a broken promise. Quiet until 20%, blinking red at 10%.
+void drawBattery(M5Canvas& c, uint32_t now) {
+    static int level = -1;
+    static uint32_t lastPoll = 0;
+    if (level < 0 || now - lastPoll > 5000) {
+        lastPoll = now;
+        level = M5.Power.getBatteryLevel();
+    }
+    if (level < 0 || level > 20 || keys::quickEditActive()) return;
+    if (level <= 10 && (now >> 9) & 1) return;  // blink when critical
+    char buf[12];
+    snprintf(buf, sizeof buf, "BAT %d%%", level);
+    c.setFont(&fonts::Font0);
+    c.setTextColor(level <= 10 ? theme::kRed : theme::kAmber, theme::kBg);
+    c.drawString(buf, kTraceX + 2, kScopeY + 3);
+}
+
 void drawHint(M5Canvas& c) {
     c.setFont(&fonts::Font0);
     if (keys::quickEditActive()) {
@@ -357,6 +458,7 @@ void run() {
             settings::run(canvas);
             keys::resync();
             gPrevValid = false;
+            gTrailInit = false;  // restart the pitch trail clean
             introShownAt = millis();
             continue;
         }
@@ -375,6 +477,7 @@ void run() {
         drawStatus(canvas);
         drawScope(canvas, frameStart);
         drawReadout(canvas);
+        drawBattery(canvas, frameStart);
         drawBottom(canvas);
         drawHint(canvas);
         hud::draw(canvas, frameStart);

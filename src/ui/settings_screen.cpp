@@ -175,6 +175,14 @@ void aRes(int d) {
     s.resonance = clampT(s.resonance + d * 0.05f, 0.f, 0.95f);
 }
 
+void fScopeMode(char* o, int c) {
+    snprintf(o, c, "%s", store::get().scopeMode == 0 ? "waveform" : "pitch trail");
+}
+void aScopeMode(int) {
+    auto& g = store::get();
+    g.scopeMode = g.scopeMode ? 0 : 1;
+}
+
 void fBoot(char* o, int c) { snprintf(o, c, "%s", store::get().bootSound ? "on" : "off"); }
 void aBoot(int) { store::get().bootSound = !store::get().bootSound; }
 
@@ -204,6 +212,7 @@ const Item kItems[] = {
     {"Bend time", fBendMs, aBendMs},
     {"Fat detune", fDetune, aDetune},
     {"Resonance", fRes, aRes},
+    {"Display", fScopeMode, aScopeMode},
     {"Boot sound", fBoot, aBoot},
     {"Intro card", fIntro, aIntro},
     {"Reset defaults", fReset, aReset},
@@ -221,6 +230,23 @@ void draw(M5Canvas& c, int sel, int top) {
     c.drawString("GLIDE", 5, 3);
     c.setTextColor(theme::kIdle, theme::kPanel);
     c.drawString("SETTINGS", 44, 3);
+
+    // battery, polled lazily — it's the natural place to check before a set
+    static int bat = -1;
+    static uint32_t batAt = 0;
+    if (bat < 0 || millis() - batAt > 2000) {
+        batAt = millis();
+        bat = M5.Power.getBatteryLevel();
+    }
+    if (bat >= 0) {
+        char bb[12];
+        snprintf(bb, sizeof bb, "BAT %d%%", bat);
+        c.setTextDatum(top_right);
+        c.setTextColor(bat <= 20 ? (bat <= 10 ? theme::kRed : theme::kAmber) : theme::kDim,
+                       theme::kPanel);
+        c.drawString(bb, cfg::kScreenW - 4, 3);
+        c.setTextDatum(top_left);
+    }
 
     c.setFont(&fonts::Font2);
     char val[28];

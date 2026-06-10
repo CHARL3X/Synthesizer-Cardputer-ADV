@@ -60,6 +60,16 @@ int main() {
     midiToNoteCents(69.3f, name, sizeof name, cents);
     CHECK(name[0] == 'A' && cents == 30, "note+cents readout");
 
+    // ---- scale tables are well-formed (incl. the v0.5 additions) ---------
+    for (int si = 0; si < kScaleCount; ++si) {
+        const Scale& sc = kScales[si];
+        CHECK(sc.len >= 5 && sc.len <= 12, "scale length sane");
+        CHECK(sc.steps[0] == 0, "scale starts at the root");
+        for (int j = 1; j < sc.len; ++j)
+            CHECK(sc.steps[j] > sc.steps[j - 1] && sc.steps[j] < 12,
+                  "scale steps ascend within the octave");
+    }
+
     // ---- synth: silence -> sound -> silence ------------------------------
     Synth s;
     s.init(kSr);

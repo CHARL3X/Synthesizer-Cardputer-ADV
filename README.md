@@ -69,6 +69,11 @@ it's already a tiny fretboard. So GLIDE treats it like one:
   phosphor afterglow. The note readout tracks the lead voice in cents,
   *through* glides and bends, so you can see exactly where you are between
   the notes.
+- Or flip the display to the **pitch trail** (settings → *Display*): the lead
+  voice's pitch drawn over time, scrolling across ~7 seconds, with root-note
+  gridlines as fret markers. On an instrument about the space *between* the
+  notes, this is the scope for the other axis — every glide, hammer-on and
+  bend becomes a visible curve.
 
 ## The sounds
 
@@ -123,6 +128,10 @@ hurdy-gurdy lineage). Settings → *Jam rows*:
 - Drones are protected: they don't count against the lead's voice cap and
   chord-slide stealing can never grab them. Your backing survives anything
   your solo hand does.
+- The backing is also *pitch-stable*: bend keys and tilt vibrato move only
+  the solo layer — your fretting hand bends strings, the open strings keep
+  droning. (Drones do keep the patch's own built-in vibrato; that's part of
+  the sound.)
 - When you release one, it fades with a long drawn-out tail instead of
   stopping dead under your solo.
 - Octave shifts sweep the drones along with everything else; panic (bksp)
@@ -145,6 +154,9 @@ Jam rows are an arrangement you switch on when it's time to perform.
 - **Failures are visible.** If the audio path can't start you get a red
   AUDIO INIT FAILED screen with the reason — never a silently dead
   instrument. Rejected changes (octave ceiling, etc.) flash red in the HUD.
+  And a pocket instrument that dies mid-jam without warning is the same sin:
+  below 20% battery the perform screen says so (blinking red at 10%), and
+  settings always shows the exact percentage.
 - **Minimal onboard effects.** A lowpass filter with resonance, soft
   saturation, and a speaker-protecting highpass. Loop and process
   externally, like we said — the instrument's identity is its sounds and
@@ -246,12 +258,12 @@ firmware never touches raw I2S and why the library versions are pinned.
 |---|---|---|---|
 | glide time | 0–2000 ms | 120 | fn+1 |
 | attack / decay / sustain / release | 0–2s / 0–2s / 0–100% / 0–3s | 5ms / 120ms / 70% / 250ms | fn+2..5 |
-| waveform | sine, tri, saw, sqr, fat | saw | fn+6 |
+| waveform | sine, tri, saw, sqr, fat, pwm | saw | fn+6 |
 | cutoff / resonance | 80–12k Hz / 0–95% | 4k / 30% | fn+7 / settings |
 | voices | 1–8 | 6 | fn+8 |
 | bend range / bend time | 1–12 st / 50–1000 ms | 2 st / 250 ms | fn+9 / settings |
 | volume | 0–100% | 70% | fn+0 |
-| root / scale / row interval | C–B / 8 scales / 1–12 st | A / min pent / 4th | settings |
+| root / scale / row interval | C–B / 13 scales / 1–12 st | A / min pent / 4th | settings |
 | glide mode | legato-only / always | legato-only | settings (per sound) |
 | allocation | strings (mono rows) / free poly | strings | settings |
 | jam rows (drones) | off / bottom / bottom 2 | off | settings |
@@ -262,6 +274,7 @@ firmware never touches raw I2S and why the library versions are pinned.
 | tilt routing | off / cutoff / vibrato / volume | per sound | settings, enter toggles |
 | tilt depth | 0–100% | per sound | settings |
 | tilt center | calibrated "flat" | 0 | settings (hold + set) |
+| display | waveform scope / pitch trail | waveform | settings |
 
 ---
 

@@ -41,6 +41,9 @@ struct GlideConfig {
     uint16_t jamBpm = 100;    // jam-motion tempo
     uint16_t bendMs = 250;    // time to reach full bend range
     uint8_t bendRange = 2;    // semitones
+    uint8_t scopeMode = 0;    // 0=waveform scope, 1=pitch trail (the glide,
+                              // drawn over time — watch a slide curve between
+                              // the notes)
     bool bootSound = true;
     bool seenIntro = false;
 };

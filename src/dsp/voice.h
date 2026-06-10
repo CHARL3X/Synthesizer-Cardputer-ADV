@@ -57,6 +57,7 @@ private:
     float curPitch_ = 60.f, tgtPitch_ = 60.f, startPitch_ = 60.f;
     uint32_t ph_[4] = {0, 0, 0, 0};  // main, fat up, fat down, sub (-1 oct)
     uint32_t rng_ = 0x9E3779B9u;     // per-voice noise state
+    float pwmPhase_ = 0.f;           // slow pulse-width LFO (Pulse wave)
     bool drone_ = false;             // jam-row backing voice
 };
 

@@ -174,11 +174,14 @@ void Synth::render(float* out, int n) {
     // patch vibrato (autoVibCents) and tilt vibrato sum
     lfoPhase_ += kTwoPi * kVibratoHz * n / sr_;
     if (lfoPhase_ > kTwoPi) lfoPhase_ -= kTwoPi;
-    const float cents =
-        p_.bendCents + (p_.vibratoCents + p_.autoVibCents) * sinf(lfoPhase_);
+    const float lfo = sinf(lfoPhase_);
+    const float cents = p_.bendCents + (p_.vibratoCents + p_.autoVibCents) * lfo;
+    // the backing stays put: drones ignore bend keys and tilt vibrato (only
+    // the solo hand bends strings), keeping just the patch's own vibrato
+    const float droneCents = p_.autoVibCents * lfo;
 
     for (auto& v : voices_)
-        if (v.active()) v.render(out, n, p_, cents);
+        if (v.active()) v.render(out, n, p_, v.isDrone() ? droneCents : cents);
 
     // paraphonic filter envelope, advanced at block rate (4 ms)
     const float blockDur = n / sr_;
