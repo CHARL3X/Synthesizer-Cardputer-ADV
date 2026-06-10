@@ -105,6 +105,9 @@ constexpr uint32_t kTiltLongMs = 350;
 // pushes through the existing queue — the dsp/ engine stays untouched.
 uint32_t gLastBeatMs = 0;
 int gArpIdx = 0;
+uint32_t gBeatFlashAt = 0;  // last re-strike, for the grid-map beat blink
+int gBeatFlashCd = -1;      // which drone key fired (-1 = the whole chord)
+constexpr uint32_t kBeatFlashMs = 120;
 
 // quick-edit
 bool gQuickEdit = false;
@@ -413,11 +416,14 @@ void jamTick(uint32_t nowMs) {
 
     if (cfgr.jamMotion == 1) {            // pulse: re-strike the whole chord
         for (int i = 0; i < nd; ++i) restrikeDrone(drones[i]);
+        gBeatFlashCd = -1;
     } else {                              // arp: one drone per beat, low->high
         gArpIdx %= nd;
         restrikeDrone(drones[gArpIdx]);
+        gBeatFlashCd = drones[gArpIdx];
         gArpIdx = (gArpIdx + 1) % nd;
     }
+    gBeatFlashAt = nowMs;  // the grid map blinks the struck key(s)
 }
 
 // ---- quick-edit layer (hold fn, top row selects, [ ] adjusts) ---------------
@@ -702,6 +708,20 @@ bool noteHeld(int string, int col) {
     }
     return false;
 }
+
+int noteState(int string, int col, uint32_t nowMs) {
+    for (int cd = 0; cd < 56; ++cd) {
+        const HeldNote& n = gNotes[cd];
+        if (!sounding(n) || n.string != string || n.col != col) continue;
+        if (!n.drone) return 1;
+        const bool flash = nowMs - gBeatFlashAt < kBeatFlashMs &&
+                           (gBeatFlashCd < 0 || gBeatFlashCd == cd);
+        return flash ? 3 : 2;
+    }
+    return 0;
+}
+
+float quickParamFill(int idx) { return quickFill(idx); }
 
 bool quickEditActive() { return gQuickEdit; }
 int quickEditParam() { return gQuickParam; }

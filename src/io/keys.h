@@ -29,10 +29,14 @@ Actions poll(uint32_t nowMs);
 
 // view state for the perform screen
 bool noteHeld(int string, int col);
+// Richer grid-map state: 0 = silent, 1 = held lead, 2 = latched drone,
+// 3 = drone flashing on the jam-motion beat (the backing made visible).
+int noteState(int string, int col, uint32_t nowMs);
 bool quickEditActive();
 int quickEditParam();          // selected slot 0..9
 const char* quickParamName(int idx);
 void quickParamValue(int idx, char* out, int cap);  // formatted current value
+float quickParamFill(int idx);  // 0..1 gauge for the edit panel, <0 = no bar
 float bendCentsNow();
 bool holdLatched();
 bool sustainActive();

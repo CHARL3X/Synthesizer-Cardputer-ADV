@@ -3,6 +3,7 @@
 #include <M5Cardputer.h>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "../config.h"
 #include "../dsp/pitch.h"
@@ -35,6 +36,7 @@ float gScopeBuf[512];
 // pitch trail: lead pitch sampled once per frame, scrolling right-to-left
 // (~7.5 s across the screen at 30 fps). NAN = silence gap.
 float gTrail[kTraceW];
+uint8_t gTrailBend[kTraceW];  // frames where the bend keys were deforming it
 int gTrailPos = 0;
 bool gTrailInit = false;
 float gTrailCenter = 69.f;  // view center in MIDI, follows the lead slowly
@@ -131,7 +133,9 @@ void drawStatus(M5Canvas& c) {
     // annunciators, right side
     int x = cfg::kScreenW - 4;
     auto l = audio::lead();
-    snprintf(buf, sizeof buf, "vox %d/%d", l.held, cf.synth.voiceCount);
+    // leads vs the cap — what the cap actually governs. Latched drones live
+    // outside it (their count sits by the grid map); no more "vox 5/4".
+    snprintf(buf, sizeof buf, "vox %d/%d", l.leads, cf.synth.voiceCount);
     c.setTextDatum(top_right);
     c.setTextColor(l.held > 0 ? theme::kGreen : theme::kDim, theme::kPanel);
     c.drawString(buf, x, 2);
@@ -165,15 +169,19 @@ void drawEditPanel(M5Canvas& c) {
     char buf[24], val[10];
     for (int i = 0; i < 10; ++i) {
         const int y = kScopeY + 1 + i * 8;
-        // params (left)
+        // params (left): a value gauge behind each row — the whole sound
+        // reads at a glance, like channel strips on a mixer
         keys::quickParamValue(i, val, sizeof val);
         snprintf(buf, sizeof buf, "%c %-7s %s", kParamKeys[i], kShort[i], val);
-        if (i == sel) {
-            c.fillRect(2, y - 1, 116, 8, theme::kPanel);
-            c.setTextColor(theme::kAmber, theme::kPanel);
-        } else {
-            c.setTextColor(theme::kDim, theme::kBg);
+        if (i == sel) c.fillRect(2, y - 1, 116, 8, theme::kPanel);
+        const float fill = keys::quickParamFill(i);
+        if (fill >= 0.f) {
+            const int bw = (int)(114.f * (fill > 1.f ? 1.f : fill));
+            if (bw > 0)
+                c.fillRect(3, y - 1, bw, 8,
+                           i == sel ? theme::scale(theme::kAmber, 70) : theme::kLine);
         }
+        c.setTextColor(i == sel ? theme::kAmber : theme::kDim);  // bg shows through
         c.drawString(buf, 6, y);
         // sounds (right)
         const bool cur = (i == cf.currentPatch);
@@ -195,6 +203,7 @@ void drawEditPanel(M5Canvas& c) {
 void drawPitchTrail(M5Canvas& c) {
     if (!gTrailInit) {
         for (int i = 0; i < kTraceW; ++i) gTrail[i] = NAN;
+        memset(gTrailBend, 0, sizeof gTrailBend);
         gTrailPos = 0;
         gTrailCenterSet = false;
         gTrailInit = true;
@@ -212,6 +221,7 @@ void drawPitchTrail(M5Canvas& c) {
         gTrailCenter += d * (fabsf(d) > 12.f ? 0.3f : 0.05f);
     }
     gTrail[gTrailPos] = v;
+    gTrailBend[gTrailPos] = fabsf(keys::bendCentsNow()) > 2.f ? 1 : 0;
     gTrailPos = (gTrailPos + 1) % kTraceW;
 
     // 30-semitone window: ~2.5 octaves visible
@@ -239,20 +249,23 @@ void drawPitchTrail(M5Canvas& c) {
         }
     }
 
-    // the trace, oldest at the left edge
+    // the trace, oldest at the left edge; segments drawn while the bend keys
+    // were pulling the pitch go amber — earned notes, marked
     int prevY = 0;
     bool prevValid = false;
     for (int x = 0; x < kTraceW; ++x) {
-        const float m = gTrail[(gTrailPos + x) % kTraceW];
+        const int idx = (gTrailPos + x) % kTraceW;
+        const float m = gTrail[idx];
         if (m != m) {  // NAN: a rest — break the line
             prevValid = false;
             continue;
         }
         const int y = yOf(m);
+        const uint16_t col = gTrailBend[idx] ? theme::kAmber : theme::kGreen;
         if (prevValid)
-            c.drawLine(kTraceX + x - 1, prevY, kTraceX + x, y, theme::kGreen);
+            c.drawLine(kTraceX + x - 1, prevY, kTraceX + x, y, col);
         else
-            c.drawPixel(kTraceX + x, y, theme::kGreen);
+            c.drawPixel(kTraceX + x, y, col);
         prevY = y;
         prevValid = true;
     }
@@ -338,7 +351,7 @@ void drawReadout(M5Canvas& c) {
     }
 }
 
-void drawBottom(M5Canvas& c) {
+void drawBottom(M5Canvas& c, uint32_t now) {
     auto& cf = store::get();
     auto& s = cf.synth;
     char buf[44];
@@ -359,17 +372,25 @@ void drawBottom(M5Canvas& c) {
                  (int)(s.masterVol * 100), cf.bendRange);
     c.drawString(buf, 4, kBottomY + 10);
 
-    // mini grid-map: 4x10, top row = string 3. green = held, amber = root
-    // degrees (lock on) or in-scale keys (lock off), faint = the rest.
+    // mini grid-map: 4x10, top row = string 3. green = held lead, amber =
+    // latched drone (blinking white on the jam-motion beat — you can SEE the
+    // arp walk), small amber dot = root degrees (lock on) or in-scale keys
+    // (lock off), faint = the rest.
     const int gx = 166, gy = kBottomY, cw = 7, ch = 6;
     const auto& sc = dsp::kScales[cf.layout.scaleIdx];
     const int rowDeg = dsp::rowDegrees(cf.layout);
+    int droneCount = 0;
     for (int str = 0; str < dsp::kGridStrings; ++str) {
         const int y = gy + (3 - str) * ch;
         for (int col = 0; col < dsp::kGridCols; ++col) {
             const int x = gx + col * cw;
-            if (keys::noteHeld(str, col)) {
-                c.fillRect(x, y, cw - 1, ch - 1, theme::kGreen);
+            const int st = keys::noteState(str, col, now);
+            if (st > 0) {
+                if (st >= 2) ++droneCount;
+                const uint16_t fill = st == 1   ? theme::kGreen
+                                      : st == 2 ? theme::kAmber
+                                                : theme::kIdle;  // beat blink
+                c.fillRect(x, y, cw - 1, ch - 1, fill);
                 continue;
             }
             bool mark;
@@ -380,6 +401,14 @@ void drawBottom(M5Canvas& c) {
             }
             c.fillRect(x + 2, y + 2, 2, 2, mark ? theme::kAmber : theme::kLine);
         }
+    }
+    // the backing, counted where it lives — drones sit outside the lead cap
+    if (droneCount > 0) {
+        snprintf(buf, sizeof buf, "+%d", droneCount);
+        c.setTextColor(theme::kAmber, theme::kBg);
+        c.setTextDatum(top_right);
+        c.drawString(buf, gx - 3, gy + 9);
+        c.setTextDatum(top_left);
     }
 }
 
@@ -478,7 +507,7 @@ void run() {
         drawScope(canvas, frameStart);
         drawReadout(canvas);
         drawBattery(canvas, frameStart);
-        drawBottom(canvas);
+        drawBottom(canvas, frameStart);
         drawHint(canvas);
         hud::draw(canvas, frameStart);
         if (!cf.seenIntro) drawIntro(canvas);

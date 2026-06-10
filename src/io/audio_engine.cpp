@@ -39,6 +39,7 @@ std::atomic<bool> gLeadActive{false};
 std::atomic<float> gLeadPitch{0.f};
 std::atomic<float> gLeadGlide{1.f};
 std::atomic<uint8_t> gHeld{0};
+std::atomic<uint8_t> gHeldLeads{0};
 std::atomic<uint8_t> gSounding{0};
 
 const char* gError = nullptr;
@@ -80,6 +81,7 @@ void renderTask(void*) {
         gLeadPitch.store(gSynth.leadPitchMidi());
         gLeadGlide.store(gSynth.leadGlide01());
         gHeld.store((uint8_t)gSynth.heldVoices());
+        gHeldLeads.store((uint8_t)gSynth.heldLeadVoices());
         gSounding.store((uint8_t)gSynth.activeVoices());
 
         int16_t* blk = gBlocks[b];
@@ -179,6 +181,7 @@ Lead lead() {
     l.pitchMidi = gLeadPitch.load();
     l.glide01 = gLeadGlide.load();
     l.held = gHeld.load();
+    l.leads = gHeldLeads.load();
     l.sounding = gSounding.load();
     return l;
 }

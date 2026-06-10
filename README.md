@@ -73,7 +73,7 @@ it's already a tiny fretboard. So GLIDE treats it like one:
   voice's pitch drawn over time, scrolling across ~7 seconds, with root-note
   gridlines as fret markers. On an instrument about the space *between* the
   notes, this is the scope for the other axis — every glide, hammer-on and
-  bend becomes a visible curve.
+  bend becomes a visible curve (segments pulled by the bend keys draw amber).
 
 ## The sounds
 
@@ -134,6 +134,10 @@ hurdy-gurdy lineage). Settings → *Jam rows*:
   the sound.)
 - When you release one, it fades with a long drawn-out tail instead of
   stopping dead under your solo.
+- The backing is visible: latched drones show **amber** on the mini grid-map
+  (held leads stay green) with a `+n` count beside it, and jam motion blinks
+  each struck key white on the beat — you can watch the arp walk. The `vox`
+  counter shows leads against the cap only, since drones never count.
 - Octave shifts sweep the drones along with everything else; panic (bksp)
   clears them.
 

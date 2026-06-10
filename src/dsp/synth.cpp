@@ -78,6 +78,12 @@ int Synth::heldVoices() const {
     return n;
 }
 
+int Synth::heldLeadVoices() const {
+    int n = 0;
+    for (const auto& v : voices_) n += (v.held() && !v.isDrone()) ? 1 : 0;
+    return n;
+}
+
 int Synth::activeVoices() const {
     int n = 0;
     for (const auto& v : voices_) n += v.active() ? 1 : 0;

@@ -265,6 +265,13 @@ void draw(M5Canvas& c, int sel, int top) {
         c.setTextDatum(top_left);
     }
 
+    // scroll position: 22 items behind an 8-row window deserve a map
+    const int trackY = 18, trackH = kVisible * 13 - 2;
+    c.drawFastVLine(cfg::kScreenW - 2, trackY, trackH, theme::kLine);
+    const int thumbH = trackH * kVisible / kItemCount;
+    const int thumbY = trackY + (trackH - thumbH) * sel / (kItemCount - 1);
+    c.fillRect(cfg::kScreenW - 3, thumbY, 2, thumbH, theme::kDim);
+
     c.setFont(&fonts::Font0);
     c.setTextColor(theme::kDim, theme::kBg);
     c.drawString("; . move    , / or [ ] change    ` tab back", 4, 125);

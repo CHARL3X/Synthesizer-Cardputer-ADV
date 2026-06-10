@@ -25,6 +25,7 @@ public:
     }
     float leadGlide01() const { return leadIdx_ >= 0 ? voices_[leadIdx_].glide01() : 1.f; }
     int heldVoices() const;
+    int heldLeadVoices() const;  // held minus drones — what the cap governs
     int activeVoices() const;
 
 private:
