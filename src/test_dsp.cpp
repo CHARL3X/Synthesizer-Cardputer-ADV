@@ -194,8 +194,9 @@ int main() {
     peakOf(s, 40);
 
     // ---- factory sound bank: every patch is alive and sane ----------------
-    // Exercises the new engine paths: sub-osc (BASS), noise (GHOST/PERC),
-    // filter envelope (PLUCK/ACID/PERC), drive (ACID), auto-vib (WHISTLE).
+    // Exercises the engine paths: sub-osc (BASS/CELLO), noise (CELLO),
+    // filter envelope (PLUCK/ACID/CELLO), drive (ACID), auto-vib (WHISTLE),
+    // PWM pulse (STRINGS).
     const Patch* bank = factoryPatches();
     for (int i = 0; i < kPatchCount; ++i) {
         CHECK(bank[i].name[0] != '\0', "patch has a name");

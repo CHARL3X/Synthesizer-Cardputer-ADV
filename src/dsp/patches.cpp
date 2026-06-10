@@ -147,42 +147,53 @@ void buildBank(Patch* P) {
         p.tiltRoute = TiltRoute::Volume;
         p.tiltDepth = 0.8f;
     }
-    // o — GHOST: breathy sine+noise, slow everything, always gliding.
+    // o — STRINGS: PWM ensemble wash (v0.5 Pulse wave's factory home).
+    // Replaced GHOST: built FOR the drone workflow — latch it as a bed and it
+    // breathes; solo on it and every slide blooms. Tilt is the section swell.
     {
         Patch& p = P[8];
-        setName(p, "GHOST");
+        setName(p, "STRINGS");
         auto& s = p.synth;
-        s.wave = Waveform::Sine;
-        s.noiseLevel = 0.35f;
+        s.wave = Waveform::Pulse;
         s.glideMode = GlideMode::Always;
-        s.glideS = 0.3f;
-        s.attackS = 0.25f;
+        s.glideS = 0.2f;
+        s.attackS = 0.15f;
         s.decayS = 0.4f;
-        s.sustain = 0.8f;
+        s.sustain = 0.85f;
         s.releaseS = 0.6f;
-        s.cutoffHz = 1800.f;
-        s.resonance = 0.5f;
-        p.tiltRoute = TiltRoute::Cutoff;
-        p.tiltDepth = 0.5f;
+        s.cutoffHz = 3200.f;
+        s.resonance = 0.15f;
+        s.subLevel = 0.2f;
+        s.autoVibCents = 4.f;
+        p.tiltRoute = TiltRoute::Volume;
+        p.tiltDepth = 0.7f;
     }
-    // p — PERC: noise chirp with a filter snap. A drum you can pitch.
+    // p — CELLO: the bowed voice — hurdy-gurdy lineage, like the drones.
+    // Replaced PERC: driven saw + sub for the body, env-gated noise as bow
+    // rosin, a small filter "dig" on fresh bow strokes (paraphonic fenv never
+    // re-snaps legato slides), and a singing tilt vibrato. Made for bends.
     {
         Patch& p = P[9];
-        setName(p, "PERC");
+        setName(p, "CELLO");
         auto& s = p.synth;
-        s.wave = Waveform::Triangle;
-        s.noiseLevel = 0.8f;
-        s.attackS = 0.001f;
-        s.decayS = 0.09f;
-        s.sustain = 0.f;
-        s.releaseS = 0.07f;
-        s.cutoffHz = 420.f;
-        s.resonance = 0.6f;
-        s.fenvOct = 3.2f;
-        s.fenvDecS = 0.08f;
-        s.glideS = 0.03f;
-        p.tiltRoute = TiltRoute::Cutoff;
-        p.tiltDepth = 0.6f;
+        s.wave = Waveform::Saw;
+        s.drive = 2.2f;
+        s.cutoffHz = 1300.f;
+        s.resonance = 0.35f;
+        s.attackS = 0.05f;
+        s.decayS = 0.25f;
+        s.sustain = 0.8f;
+        s.releaseS = 0.3f;
+        s.glideS = 0.12f;
+        s.subLevel = 0.35f;
+        s.noiseLevel = 0.07f;
+        s.fenvOct = 0.7f;
+        s.fenvDecS = 0.3f;
+        s.autoVibCents = 5.f;
+        p.tiltRoute = TiltRoute::Vibrato;
+        p.tiltDepth = 0.7f;
+        p.tiltRouteB = TiltRoute::Cutoff;  // dual mode: roll = bow pressure
+        p.tiltDepthB = 0.5f;
     }
 }
 

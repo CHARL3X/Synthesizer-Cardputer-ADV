@@ -91,8 +91,8 @@ A `*` in the status bar means you've saved your own version over the slot
 | y | **PAD** | fat detuned wash, slow bloom | filter (gentle) |
 | u | **LEAD** | driven, singing vibrato | vibrato |
 | i | **ORGAN** | square + sub, instant — *tilt is the swell pedal* | volume |
-| o | **GHOST** | breathy sine + noise, everything slow | filter |
-| p | **PERC** | pitched noise chirp, a drum you can slide | filter |
+| o | **STRINGS** | PWM ensemble wash, slow bloom, always gliding — lush as a drone bed | volume (swell) |
+| p | **CELLO** | bowed: driven saw + sub, bow-rosin noise, made for bends | vibrato (roll: bow pressure) |
 
 Under the hood these ride five engine additions: a paraphonic **filter
 envelope** (retriggered by fresh attacks, never by legato hand-offs — your
