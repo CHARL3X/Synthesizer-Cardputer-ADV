@@ -163,6 +163,14 @@ void begin() {
     gCfg.bendMs = clampT<int>(gPrefs.getUShort("bendms", d.bendMs), 50, 1000);
     gCfg.bendRange = clampT<int>(gPrefs.getUChar("bendrg", d.bendRange), 1, 12);
     gCfg.scopeMode = clampT<int>(gPrefs.getUChar("scopemd", d.scopeMode), 0, 1);
+    // one-time: pitch trail became the default — adopt it even on devices that
+    // saved the old waveform default before the change (runs once; the player's
+    // later choice still sticks).
+    if (!gPrefs.getBool("dispv2", false)) {
+        gCfg.scopeMode = 1;
+        gPrefs.putUChar("scopemd", 1);
+        gPrefs.putBool("dispv2", true);
+    }
     gCfg.bootSound = gPrefs.getBool("boot", d.bootSound);
     gCfg.seenIntro = gPrefs.getBool("intro", d.seenIntro);
 }
