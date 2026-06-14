@@ -186,6 +186,39 @@ replayed through the live engine:
 Loops are performance state — they live until cleared or power-off, and are
 never written to flash.
 
+## The chord progression (the easy way to back yourself)
+
+The loop pedal records a *performance* — which means your timing has to be
+right, and a loop is one phrase, not a chord change. The drones fixed the
+"timing" problem (tap to latch, no rhythm) but a drone is one chord forever.
+The **auto-progression** is the missing middle: a soft chord progression you
+spell with no timing at all, then solo over. Settings → *Jam motion:
+progression* (needs *Jam rows* on):
+
+- **Tap the chords in order on the jam row — that's it.** Each tap appends a
+  step (repeats allowed: I–IV–V–IV is four taps). No metronome, no pocket to
+  hit. The HUD confirms each one (`PROG  3: E`).
+- The beat clock then walks the steps **one chord per bar**, looping, at the
+  *Jam tempo* — *Chord length* sets the beats per chord. The backing **glides
+  from chord to chord** (of course it does) and re-blooms each bar, so on a
+  pad or strings patch it's a soft wash you can solo straight over.
+- Each step is a **diatonic triad** built from the current scale — real
+  major/minor/dim color, and *always in key*: the same "you can't hit a wrong
+  note" guarantee the melody gets, now for the backing too. (Hold `shift` or
+  turn scale lock off while tapping a step for a chromatic power-chord voicing
+  instead.)
+- It's a protected backing layer like the drones and the loop: cap-exempt,
+  steal-proof, ignores your bends and tilt vibrato, and **re-voices through
+  whatever sound you switch to** mid-jam. Lay down PAD, solo on LEAD.
+- The progression is on screen: a `PROG  A  D  E  ▸` strip across the top of
+  the scope with the chord sounding now boxed, and its root outlined on the
+  mini grid-map so you can watch the changes walk.
+- **bksp (panic)** clears the progression to start over — same gesture that
+  clears the drones. Like them, it's performance state and never hits flash.
+
+Pick PAD, STRINGS, or ORGAN for the bed, set a slow tempo, tap four chords,
+and you've got a song to solo on in about ten seconds.
+
 ## The philosophy, encoded
 
 - **The skill gap is the product.** Basic play takes minutes (scale lock +
@@ -313,6 +346,8 @@ firmware never touches raw I2S and why the library versions are pinned.
 | glide mode | legato-only / always | legato-only | settings (per sound) |
 | allocation | strings (mono rows) / free poly | strings | settings |
 | jam rows (drones) | off / bottom / bottom 2 | off | settings |
+| jam motion | sustained / pulse / arp / progression | sustained | settings |
+| jam tempo / chord length | 40–240 bpm / 1–8 beats | 100 / 4 | settings |
 | octave keys | sweep (glide) / re-strike | sweep | settings |
 | sound slots | 10, factory + user overrides | GLIDE | fn+q..p, fn+shift+q..p |
 | filter env (atk/dec/depth) | 1ms–2s / 10ms–2s / 0–3+ oct | per sound | settings*/saved in sound |

@@ -54,6 +54,41 @@ inline bool chromaticInScale(const Layout& l, int string, int col) {
     return false;
 }
 
+// A diatonic chord rooted at a grid position — the backing for the auto
+// progression. With scale lock it stacks scale-thirds (degrees d, d+2, d+4):
+// real major/minor/dim color that is ALWAYS in key, the same "you can't hit a
+// wrong note" guarantee the melody gets. Chromatic (lock off) falls back to a
+// power voicing (root, fifth, octave). Voiced one octave under the grid pitch,
+// like the drones — a low pad to solo over. Writes up to maxOut fractional
+// MIDI notes (root first) and returns the count.
+inline int chordPitches(const Layout& l, int string, int col, bool chromatic,
+                        float* out, int maxOut) {
+    if (maxOut <= 0) return 0;
+    const float base = 12.f * (l.octave + 1) + l.rootSemis - 12.f;  // -1 oct: bass pad
+    int n = 0;
+    if (l.scaleLock && !chromatic) {
+        const Scale& sc = kScales[l.scaleIdx];
+        const int deg0 = string * rowDegrees(l) + col;
+        const int thirds[3] = {0, 2, 4};  // stacked scale-thirds
+        for (int k = 0; k < 3 && n < maxOut; ++k) {
+            const int deg = deg0 + thirds[k];
+            out[n++] = base + 12.f * (deg / sc.len) + sc.steps[deg % sc.len];
+        }
+    } else {
+        const float root = base + string * l.rowIntervalSemis + col;
+        const float voicing[3] = {0.f, 7.f, 12.f};  // power: root, fifth, octave
+        for (int k = 0; k < 3 && n < maxOut; ++k) out[n++] = root + voicing[k];
+    }
+    return n;
+}
+
+// Pitch-class name (no octave) of a fractional MIDI note — the progression
+// step labels. Integer-rounds without <cmath> (kept out of this hot header).
+inline const char* pitchClassName(float midi) {
+    const int m = (int)(midi + 0.5f);
+    return kNoteNames[((m % 12) + 12) % 12];
+}
+
 float midiToFreq(float midi);
 
 // Nearest note name + signed cents, e.g. "A4", -50..+50.

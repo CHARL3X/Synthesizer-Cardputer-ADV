@@ -37,8 +37,12 @@ struct GlideConfig {
     uint8_t droneVoicing = 2; // 0=single note, 1=+octave, 2=+fifth (power
                               // chord) — one drone key voices a fuller backing
     uint8_t jamMotion = 0;    // 0=sustained, 1=pulse (re-strike together),
-                              // 2=arp (re-strike one per beat) — living backing
-    uint16_t jamBpm = 100;    // jam-motion tempo
+                              // 2=arp (re-strike one per beat), 3=progression
+                              // (tap chords on the jam row — no timing — and
+                              // they loop one diatonic chord per bar in tempo,
+                              // gliding between changes; you solo on top)
+    uint16_t jamBpm = 100;    // jam-motion / progression tempo
+    uint8_t jamChordBeats = 4;// progression: beats each chord holds (1 bar)
     uint16_t bendMs = 250;    // time to reach full bend range
     uint8_t bendRange = 2;    // semitones
     uint8_t scopeMode = 0;    // 0=waveform scope, 1=pitch trail (the glide,

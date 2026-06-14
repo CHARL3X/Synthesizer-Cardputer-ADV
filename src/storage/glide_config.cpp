@@ -152,8 +152,9 @@ void begin() {
                                     dsp::kPatchCount - 1);
     gCfg.jamRows = clampT<int>(gPrefs.getUChar("jamrows", d.jamRows), 0, 2);
     gCfg.droneVoicing = clampT<int>(gPrefs.getUChar("dvoice", d.droneVoicing), 0, 2);
-    gCfg.jamMotion = clampT<int>(gPrefs.getUChar("jammot", d.jamMotion), 0, 2);
+    gCfg.jamMotion = clampT<int>(gPrefs.getUChar("jammot", d.jamMotion), 0, 3);
     gCfg.jamBpm = clampT<int>(gPrefs.getUShort("jambpm", d.jamBpm), 40, 240);
+    gCfg.jamChordBeats = clampT<int>(gPrefs.getUChar("jamcbt", d.jamChordBeats), 1, 8);
     gCfg.bendMs = clampT<int>(gPrefs.getUShort("bendms", d.bendMs), 50, 1000);
     gCfg.bendRange = clampT<int>(gPrefs.getUChar("bendrg", d.bendRange), 1, 12);
     gCfg.scopeMode = clampT<int>(gPrefs.getUChar("scopemd", d.scopeMode), 0, 1);
@@ -204,6 +205,7 @@ void persistNow() {
     gPrefs.putUChar("dvoice", gCfg.droneVoicing);
     gPrefs.putUChar("jammot", gCfg.jamMotion);
     gPrefs.putUShort("jambpm", gCfg.jamBpm);
+    gPrefs.putUChar("jamcbt", gCfg.jamChordBeats);
     gPrefs.putUShort("bendms", gCfg.bendMs);
     gPrefs.putUChar("bendrg", gCfg.bendRange);
     gPrefs.putUChar("scopemd", gCfg.scopeMode);

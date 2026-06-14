@@ -117,6 +117,23 @@ uint32_t gBeatFlashAt = 0;  // last re-strike, for the grid-map beat blink
 int gBeatFlashCd = -1;      // which drone key fired (-1 = the whole chord)
 constexpr uint32_t kBeatFlashMs = 120;
 
+// auto chord progression (jamMotion == kJamProg): the easy backing. A jam-row
+// tap APPENDS a chord step — no timing, repeats allowed — and the beat clock
+// then walks the steps one diatonic chord per bar, gliding from chord to chord,
+// as a protected drone-grade layer you solo over. Backing voice ids 120..122
+// are clear of lead (0..55), drone partners (64..119), loop playback (128..183)
+// and the boot chime (250).
+constexpr uint8_t kJamProg = 3;
+constexpr uint8_t kProgIdBase = 120;
+constexpr int kProgVoices = 3;       // a diatonic triad
+constexpr int kMaxProgSteps = 16;    // a progression is short by nature
+struct ProgStep { int8_t string; int8_t col; bool chrom; };
+ProgStep gProg[kMaxProgSteps];
+int gProgLen = 0;
+int gProgIdx = 0;
+bool gProgSounding = false;
+uint32_t gProgLastAdv = 0;  // beat clock for the chord advance (0 = re-arm)
+
 // quick-edit
 bool gQuickEdit = false;
 int gQuickParam = 0;  // 0..9 selected slot
@@ -156,6 +173,7 @@ void lanePush(int lane, uint8_t cd) {
 void sendOff(int cd);
 void sendDroneOff(int cd);
 void restrikeDrone(int cd);
+void clearProg();  // defined with the progression engine, used by panic()
 
 void notePress(int cd, bool shiftHeld) {
     auto& cfgr = store::get();
@@ -163,6 +181,23 @@ void notePress(int cd, bool shiftHeld) {
 
     // jam rows: tap to latch a drone, tap again to let it fade
     if (gGridString[cd] < cfgr.jamRows) {
+        // progression mode: a jam-row tap APPENDS a chord step (no timing,
+        // repeats allowed) — spell the loop, then solo on the rows above.
+        if (cfgr.jamMotion == kJamProg) {
+            if (gProgLen >= kMaxProgSteps) { hud::showError("PROG", "full (16)"); return; }
+            const bool chrom = shiftHeld || !cfgr.layout.scaleLock;
+            gProg[gProgLen].string = gGridString[cd];
+            gProg[gProgLen].col = gGridCol[cd];
+            gProg[gProgLen].chrom = chrom;
+            ++gProgLen;
+            if (gProgLen == 1) { gProgIdx = 0; gProgLastAdv = 0; }  // arm the clock
+            float pp[kProgVoices];
+            dsp::chordPitches(cfgr.layout, gGridString[cd], gGridCol[cd], chrom, pp, kProgVoices);
+            char v[20];
+            snprintf(v, sizeof v, "%d: %s", gProgLen, dsp::pitchClassName(pp[0]));
+            hud::show("PROG", v, -1.f);
+            return;
+        }
         if (n.drone && n.string >= 0) {  // second tap: release the drone
             sendDroneOff(cd);
             return;
@@ -307,6 +342,7 @@ void clearLeadNotes() {
 
 void panic() {
     looper::stop();  // silence the loop layer too — the take survives
+    clearProg();     // the auto-progression clears with panic, like the drones
     clearAllNotes();
     hud::show("PANIC", "all notes off", -1.f);
 }
@@ -405,6 +441,72 @@ void cycleTilt() {
     store::markDirty();
 }
 
+// ---- auto chord progression -------------------------------------------------
+// Release the progression's backing voices (mode change / panic).
+void silenceProg() {
+    if (!gProgSounding) return;
+    for (int i = 0; i < kProgVoices; ++i)
+        audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, (uint8_t)(kProgIdBase + i)));
+    gProgSounding = false;
+}
+
+// Erase the whole progression (panic / start over).
+void clearProg() {
+    silenceProg();
+    gProgLen = 0;
+    gProgIdx = 0;
+    gProgLastAdv = 0;
+}
+
+// Fire step `idx` as a diatonic chord on the fixed backing ids. Re-firing the
+// same ids makes the engine glide+re-attack each voice from the previous chord
+// (legato hand-off in noteOn) — the progression slides between changes, soft
+// on a pad. Flagged drone: cap-exempt, steal-proof, ignores bend/tilt, and
+// re-voices through whatever sound is selected.
+void strikeProgChord(int idx) {
+    auto& cfgr = store::get();
+    float p[kProgVoices];
+    const int n = dsp::chordPitches(cfgr.layout, gProg[idx].string, gProg[idx].col,
+                                    gProg[idx].chrom, p, kProgVoices);
+    for (int i = 0; i < kProgVoices; ++i) {
+        if (i < n) {
+            dsp::NoteEvent ev = dsp::NoteEvent::make(dsp::NoteEvent::On,
+                                                     (uint8_t)(kProgIdBase + i), 0xFF, false, p[i]);
+            ev.drone = true;
+            audio::pushEvent(ev);
+        } else if (gProgSounding) {
+            audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, (uint8_t)(kProgIdBase + i)));
+        }
+    }
+    gProgSounding = true;
+}
+
+// Advance the progression on the beat clock: one chord every jamChordBeats
+// beats. Millis-paced on the UI thread — chord changes are bars apart, so
+// frame jitter is musically invisible (unlike the loop, which needs the audio
+// thread). Steady-phase advance with a resync if a blocking screen stalled us.
+void progTick(uint32_t nowMs) {
+    auto& cfgr = store::get();
+    if (gProgLen == 0) { gProgSounding = false; return; }
+    const uint32_t beatMs = 60000u / (cfgr.jamBpm < 20 ? 20 : cfgr.jamBpm);
+    const uint32_t stepMs = beatMs * (cfgr.jamChordBeats < 1 ? 1 : cfgr.jamChordBeats);
+    if (gProgLastAdv == 0) {  // first downbeat (or re-arm): strike now
+        gProgIdx %= gProgLen;
+        strikeProgChord(gProgIdx);
+        gProgLastAdv = nowMs;
+        gBeatFlashAt = nowMs;
+        gBeatFlashCd = -1;
+        return;
+    }
+    if (nowMs - gProgLastAdv < stepMs) return;
+    gProgLastAdv += stepMs;                                   // steady phase, no drift
+    if (nowMs - gProgLastAdv > stepMs) gProgLastAdv = nowMs;  // resync if we fell behind
+    gProgIdx = (gProgIdx + 1) % gProgLen;
+    strikeProgChord(gProgIdx);
+    gBeatFlashAt = nowMs;
+    gBeatFlashCd = -1;
+}
+
 // ---- jam motion -------------------------------------------------------------
 // Collect the latched drones, sorted low->high so an arp rolls musically.
 int collectDrones(int* out) {
@@ -423,6 +525,15 @@ int collectDrones(int* out) {
 
 void jamTick(uint32_t nowMs) {
     auto& cfgr = store::get();
+
+    // progression: the chord sequencer. Silence its backing if the mode or the
+    // jam rows turned off, so the prog voice ids don't ring on with no driver.
+    static uint8_t prevMotion = 0;
+    const bool progMode = cfgr.jamMotion == kJamProg && cfgr.jamRows > 0;
+    if (!progMode && (prevMotion == kJamProg || gProgSounding)) silenceProg();
+    prevMotion = cfgr.jamMotion;
+    if (progMode) { progTick(nowMs); gLastBeatMs = 0; return; }
+
     if (cfgr.jamMotion == 0 || cfgr.jamRows == 0) { gLastBeatMs = 0; return; }
     int drones[56];
     const int nd = collectDrones(drones);
@@ -528,6 +639,7 @@ void resync() {
     gLoopHoldFired = true;  // same guard for the loop pedal
     gLastBeatMs = 0;  // restart the jam clock cleanly after the blocking screen
     gArpIdx = 0;
+    gProgLastAdv = 0;  // re-arm the progression downbeat on return
     clearLeadNotes();  // drones (and the loop) ride through settings trips
 }
 
@@ -831,5 +943,29 @@ float bendCentsNow() { return gBendCents; }
 bool holdLatched() { return gHoldLatch; }
 bool sustainActive() { return gSustainHeld || gHoldLatch; }
 bool tiltLatched() { return gTiltLatched; }
+
+// ---- auto chord progression view state --------------------------------------
+bool progActive() {
+    auto& c = store::get();
+    return c.jamMotion == kJamProg && c.jamRows > 0;
+}
+int progLen() { return gProgLen; }
+int progIndex() { return gProgLen ? gProgIdx : -1; }
+
+void progStepName(int i, char* out, int cap) {
+    if (cap <= 0) return;
+    if (i < 0 || i >= gProgLen) { out[0] = '\0'; return; }
+    float pp[kProgVoices];
+    dsp::chordPitches(store::get().layout, gProg[i].string, gProg[i].col, gProg[i].chrom, pp,
+                      kProgVoices);
+    snprintf(out, cap, "%s", dsp::pitchClassName(pp[0]));
+}
+
+bool progCurrentCell(int& string, int& col) {
+    if (gProgLen == 0 || !gProgSounding) return false;
+    string = gProg[gProgIdx].string;
+    col = gProg[gProgIdx].col;
+    return true;
+}
 
 }  // namespace keys

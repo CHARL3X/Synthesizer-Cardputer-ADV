@@ -62,8 +62,21 @@ Voice* Synth::alloc() {
         }
     }
     if (best) return best;
-    // 3) the oldest held voice (pool fully saturated)
+    // 3) pool fully saturated: evict the oldest held LEAD voice. The backing
+    // (drones, loop playback, the auto-progression) is the foundation a solo
+    // rides on, so it is the last thing to drop — never robbed by a dense
+    // chord on top of it. Falls back to the oldest of anything only if every
+    // voice is backing.
     uint32_t oldest = 0xFFFFFFFF;
+    for (auto& v : voices_) {
+        if (v.isDrone() || v.isBacking()) continue;
+        if (v.seq() < oldest) {
+            oldest = v.seq();
+            best = &v;
+        }
+    }
+    if (best) return best;
+    oldest = 0xFFFFFFFF;
     for (auto& v : voices_) {
         if (v.seq() < oldest) {
             oldest = v.seq();

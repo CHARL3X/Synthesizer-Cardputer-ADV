@@ -42,6 +42,16 @@ bool holdLatched();
 bool sustainActive();
 bool tiltLatched();  // mod-latch: tilt values frozen (long-press enter)
 
+// auto chord progression (jam motion = progression): is the mode live, how
+// many chord steps spelled, which is playing now (-1 = idle), each step's
+// root-note label, and the grid cell of the chord sounding now — the perform
+// screen's progression annunciator and grid blink.
+bool progActive();
+int progLen();
+int progIndex();
+void progStepName(int i, char* out, int cap);
+bool progCurrentCell(int& string, int& col);
+
 // re-sync edge state after a blocking screen (settings) ate the keyboard
 void resync();
 

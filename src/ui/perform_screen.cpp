@@ -404,6 +404,14 @@ void drawBottom(M5Canvas& c, uint32_t now) {
             c.fillRect(x + 2, y + 2, 2, 2, mark ? theme::kAmber : theme::kLine);
         }
     }
+    // progression: outline the chord root sounding now, so the walking
+    // backing is visible on the grid map even though no key is held for it
+    int ps, pc;
+    if (keys::progCurrentCell(ps, pc)) {
+        const int x = gx + pc * cw, y = gy + (3 - ps) * ch;
+        c.drawRect(x, y, cw - 1, ch - 1, theme::kAmber);
+    }
+
     // the backing, counted where it lives — drones sit outside the lead cap
     if (droneCount > 0) {
         snprintf(buf, sizeof buf, "+%d", droneCount);
@@ -467,6 +475,40 @@ void drawLoop(M5Canvas& c, uint32_t now) {
     }
 }
 
+// The auto-progression annunciator: the chord sequence as note-name chips with
+// the chord sounding now boxed amber. You can read where you are in the loop at
+// a glance, and "PROG: tap chords" prompts the setup when it's still empty.
+void drawProg(M5Canvas& c, uint32_t now) {
+    if (!keys::progActive() || keys::quickEditActive()) return;
+    int y = kScopeY + 3;
+    if (looper::state() != looper::State::Empty) y += 10;  // yield the top line
+    const int x0 = kTraceX + 2;
+    c.setFont(&fonts::Font0);
+    const int len = keys::progLen();
+    if (len == 0) {
+        c.setTextColor(theme::kDim, theme::kBg);
+        c.drawString("PROG: tap chords", x0, y);
+        return;
+    }
+    c.setTextColor(theme::kAmber, theme::kBg);
+    c.drawString("PROG", x0, y);
+    const int cur = keys::progIndex();
+    int x = x0 + 28;
+    char nm[6];
+    for (int i = 0; i < len && x < kTraceX + kTraceW - 14; ++i) {
+        keys::progStepName(i, nm, sizeof nm);
+        const int w = (int)strlen(nm) * 6 + 3;
+        if (i == cur) {
+            c.fillRect(x - 1, y - 1, w, 9, theme::kAmber);
+            c.setTextColor(theme::kBg, theme::kAmber);
+        } else {
+            c.setTextColor(theme::kDim, theme::kBg);
+        }
+        c.drawString(nm, x + 1, y);
+        x += w + 2;
+    }
+}
+
 // Low-battery warning: a pocket instrument that dies mid-jam without telling
 // you is a broken promise. Quiet until 20%, blinking red at 10%.
 void drawBattery(M5Canvas& c, uint32_t now) {
@@ -482,8 +524,10 @@ void drawBattery(M5Canvas& c, uint32_t now) {
     snprintf(buf, sizeof buf, "BAT %d%%", level);
     c.setFont(&fonts::Font0);
     c.setTextColor(level <= 10 ? theme::kRed : theme::kAmber, theme::kBg);
-    // drop a line when the loop annunciator owns the top-left corner
-    const int y = looper::state() == looper::State::Empty ? kScopeY + 3 : kScopeY + 13;
+    // drop below whatever owns the top-left corner (loop and/or progression)
+    int y = kScopeY + 3;
+    if (looper::state() != looper::State::Empty) y += 10;
+    if (keys::progActive()) y += 10;
     c.drawString(buf, kTraceX + 2, y);
 }
 
@@ -500,6 +544,8 @@ void drawHint(M5Canvas& c) {
     c.setTextColor(theme::kDim, theme::kBg);
     if (ls == looper::State::Recording)
         c.drawString("recording...  alt: close the loop", 2, kHintY);
+    else if (keys::progActive())
+        c.drawString("tap row = chord progression   bksp clear", 2, kHintY);
     else if (ls != looper::State::Empty)
         c.drawString("alt dub   hold undo   fn+alt clear", 2, kHintY);
     else
@@ -585,6 +631,7 @@ void run() {
         drawScope(canvas, frameStart);
         drawReadout(canvas);
         drawLoop(canvas, frameStart);
+        drawProg(canvas, frameStart);
         drawBattery(canvas, frameStart);
         drawBottom(canvas, frameStart);
         drawHint(canvas);

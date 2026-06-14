@@ -60,6 +60,23 @@ int main() {
     midiToNoteCents(69.3f, name, sizeof name, cents);
     CHECK(name[0] == 'A' && cents == 30, "note+cents readout");
 
+    // ---- diatonic chord builder (the auto-progression backing) ----------
+    {
+        float ch[3];
+        // A min pent (default), lock on: stacked scale-thirds an octave under.
+        // base = 12*(4+1)+9-12 = 57 (A3); steps {0,3,5,7,10}: deg 0,2,4 -> 0,5,10
+        const int nc = chordPitches(l, 0, 0, false, ch, 3);
+        CHECK(nc == 3, "chord builds three tones");
+        CHECK(fabsf(ch[0] - 57.f) < 1e-4, "chord root = A3 (an octave under A4)");
+        CHECK(fabsf(ch[1] - 62.f) < 1e-4 && fabsf(ch[2] - 67.f) < 1e-4, "scale-third stack");
+        CHECK(ch[1] > ch[0] && ch[2] > ch[1], "chord tones ascend");
+        // chromatic fallback (lock off / shift) = power voicing root+5th+8ve
+        chordPitches(l, 0, 0, true, ch, 3);
+        CHECK(fabsf(ch[1] - ch[0] - 7.f) < 1e-4, "chromatic chord has a fifth");
+        CHECK(fabsf(ch[2] - ch[0] - 12.f) < 1e-4, "chromatic chord has an octave");
+        CHECK(pitchClassName(57.f)[0] == 'A', "pitch-class label");
+    }
+
     // ---- scale tables are well-formed (incl. the v0.5 additions) ---------
     for (int si = 0; si < kScaleCount; ++si) {
         const Scale& sc = kScales[si];
@@ -201,6 +218,28 @@ int main() {
     s.handleEvent(NoteEvent::make(NoteEvent::Off, 50, 0xFF, false, 0.f));
     peakOf(s, 25);  // 100 ms — far past the 50 ms release, well short of a drone tail
     CHECK(s.activeVoices() == 0, "backing releases at the normal rate");
+    s.handleEvent(NoteEvent::make(NoteEvent::AllOff, 0, 0xFF, false, 0.f));
+    peakOf(s, 40);
+
+    // ---- backing survives a saturated pool (auto-progression under a solo) --
+    // 3 drone-flagged backing voices + a full lead chord on the 8-voice pool
+    // must not drop the backing: alloc evicts the oldest LEAD, never the
+    // foundation. (The backing has the lowest seq, so the old policy would
+    // have robbed it first — this guards the chord progression.)
+    p = SynthParams();
+    p.voiceCount = 8;
+    p.releaseS = 0.05f;
+    s.setParams(p);
+    for (int i = 0; i < 3; ++i) {  // a 3-voice backing chord
+        NoteEvent b = NoteEvent::make(NoteEvent::On, (uint8_t)(120 + i), 0xFF, false, 50.f + i * 4);
+        b.drone = true;
+        s.handleEvent(b);
+    }
+    for (int i = 0; i < 8; ++i)  // hammer 8 lead notes at the pool
+        s.handleEvent(NoteEvent::make(NoteEvent::On, (uint8_t)(i + 1), 0xFF, false, 60.f + i));
+    peakOf(s, 8);
+    CHECK(s.heldVoices() == 8, "pool saturated");
+    CHECK(s.heldVoices() - s.heldLeadVoices() == 3, "all 3 backing voices survive the solo");
     s.handleEvent(NoteEvent::make(NoteEvent::AllOff, 0, 0xFF, false, 0.f));
     peakOf(s, 40);
 

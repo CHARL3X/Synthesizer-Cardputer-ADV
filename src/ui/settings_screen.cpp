@@ -94,18 +94,25 @@ void aDroneVoice(int d) {
 }
 
 void fJamMotion(char* o, int c) {
+    static const char* kNames[4] = {"sustained", "pulse", "arp", "progression"};
     const uint8_t m = store::get().jamMotion;
-    snprintf(o, c, "%s", m == 0 ? "sustained" : (m == 1 ? "pulse" : "arp"));
+    snprintf(o, c, "%s", kNames[m < 4 ? m : 0]);
 }
 void aJamMotion(int d) {
     auto& g = store::get();
-    g.jamMotion = (uint8_t)clampT((int)g.jamMotion + d, 0, 2);
+    g.jamMotion = (uint8_t)clampT((int)g.jamMotion + d, 0, 3);
 }
 
 void fJamBpm(char* o, int c) { snprintf(o, c, "%d bpm", store::get().jamBpm); }
 void aJamBpm(int d) {
     auto& g = store::get();
     g.jamBpm = (uint16_t)clampT((int)g.jamBpm + d * 4, 40, 240);
+}
+
+void fJamChord(char* o, int c) { snprintf(o, c, "%d beats", store::get().jamChordBeats); }
+void aJamChord(int d) {
+    auto& g = store::get();
+    g.jamChordBeats = (uint8_t)clampT((int)g.jamChordBeats + d, 1, 8);
 }
 
 void fTilt(char* o, int c) { snprintf(o, c, "%s", store::tiltRouteName(store::get().tiltRoute)); }
@@ -203,6 +210,7 @@ const Item kItems[] = {
     {"Drone voicing", fDroneVoice, aDroneVoice},
     {"Jam motion", fJamMotion, aJamMotion},
     {"Jam tempo", fJamBpm, aJamBpm},
+    {"Chord length", fJamChord, aJamChord},
     {"Octave keys", fOctGlide, aOctGlide},
     {"Tilt f/b route", fTilt, aTilt},
     {"Tilt f/b depth", fTiltDepth, aTiltDepth},
