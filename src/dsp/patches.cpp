@@ -40,8 +40,8 @@ void buildBank(Patch* P) {
         s.glideS = 0.12f;
         s.chorusDepth = 0.55f;
         s.delayMix = 0.12f;
-        s.delayTimeS = 0.30f;
         s.delayFb = 0.26f;
+        s.delaySync = 3;           // a gentle eighth-note shimmer in tempo
         s.reverbMix = 0.28f;
         s.reverbSize = 0.62f;
         p.tiltRoute = TiltRoute::Vibrato;
@@ -96,8 +96,8 @@ void buildBank(Patch* P) {
         s.glideS = 0.05f;
         s.chorusDepth = 0.2f;
         s.delayMix = 0.30f;
-        s.delayTimeS = 0.32f;
         s.delayFb = 0.36f;
+        s.delaySync = 2;           // dotted-eighth: runs and arpeggios lock up
         s.reverbMix = 0.28f;
         s.reverbSize = 0.7f;
         p.tiltRoute = TiltRoute::Cutoff;
@@ -183,8 +183,9 @@ void buildBank(Patch* P) {
     }
     // u — LEAD: the expressive solo voice. Fat driven saws with a touch of
     // filter bite on the attack, a subtle singing vibrato (kept small so it
-    // breathes, never seasick), and a quarter-note delay into a plate so it
-    // soars over a latched backing.
+    // breathes, never seasick), and a DOTTED-EIGHTH delay locked to the jam
+    // tempo — the Edge/Gilmour trick — so the solo sits in the groove over a
+    // progression or latched backing.
     {
         Patch& p = P[6];
         setName(p, "LEAD");
@@ -203,9 +204,9 @@ void buildBank(Patch* P) {
         s.autoVibCents = 3.5f;
         s.glideS = 0.09f;
         s.chorusDepth = 0.3f;
-        s.delayMix = 0.28f;
-        s.delayTimeS = 0.31f;
-        s.delayFb = 0.34f;
+        s.delayMix = 0.30f;
+        s.delayFb = 0.36f;
+        s.delaySync = 2;           // dotted-eighth, locked to the jam tempo
         s.reverbMix = 0.24f;
         s.reverbSize = 0.62f;
         p.tiltRoute = TiltRoute::Vibrato;
@@ -283,8 +284,8 @@ void buildBank(Patch* P) {
         s.glideS = 0.05f;
         s.chorusDepth = 0.5f;
         s.delayMix = 0.30f;
-        s.delayTimeS = 0.33f;
         s.delayFb = 0.40f;
+        s.delaySync = 2;           // dotted-eighth: the bell shimmer in tempo
         s.reverbMix = 0.45f;
         s.reverbSize = 0.85f;
         p.tiltRoute = TiltRoute::Vibrato;

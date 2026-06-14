@@ -35,7 +35,11 @@ T clampT(T v, T lo, T hi) {
 // patch. That is the intended migration: an old custom sound is replaced by
 // the upgraded factory voice (now with its FX), never garbage. New saves are
 // v3 and round-trip the FX with the slot.
-constexpr uint8_t kPatchBlobVersion = 3;
+//
+// v4 grew SynthParams again (tempo-synced delay: delaySync + the live tempoBpm
+// field). Same deal — v3 saves size-mismatch and fall back to the upgraded
+// factory voice, which now carries the synced-delay personality.
+constexpr uint8_t kPatchBlobVersion = 4;
 
 struct PatchBlobV1 {  // frozen: byte-for-byte the original v1 layout
     uint8_t version;
@@ -124,8 +128,9 @@ void begin() {
     // dry — the new lush presets load the moment any patch is selected.
     s.chorusDepth = clampT<int>(gPrefs.getInt("chorus", (int)(d.synth.chorusDepth * 100)), 0, 100) / 100.f;
     s.delayMix    = clampT<int>(gPrefs.getInt("dlymix", (int)(d.synth.delayMix * 100)), 0, 100) / 100.f;
-    s.delayTimeS  = clampT<int>(gPrefs.getInt("dlytime", (int)(d.synth.delayTimeS * 1000)), 10, 290) / 1000.f;
+    s.delayTimeS  = clampT<int>(gPrefs.getInt("dlytime", (int)(d.synth.delayTimeS * 1000)), 10, 600) / 1000.f;
     s.delayFb     = clampT<int>(gPrefs.getInt("dlyfb", (int)(d.synth.delayFb * 100)), 0, 90) / 100.f;
+    s.delaySync   = clampT<int>(gPrefs.getUChar("dlysync", d.synth.delaySync), 0, dsp::kDelaySyncCount - 1);
     s.reverbMix   = clampT<int>(gPrefs.getInt("rvbmix", (int)(d.synth.reverbMix * 100)), 0, 100) / 100.f;
     s.reverbSize  = clampT<int>(gPrefs.getInt("rvbsize", (int)(d.synth.reverbSize * 100)), 0, 100) / 100.f;
 
@@ -180,6 +185,7 @@ void persistNow() {
     gPrefs.putInt("dlymix", (int)(s.delayMix * 100));
     gPrefs.putInt("dlytime", (int)(s.delayTimeS * 1000));
     gPrefs.putInt("dlyfb", (int)(s.delayFb * 100));
+    gPrefs.putUChar("dlysync", s.delaySync);
     gPrefs.putInt("rvbmix", (int)(s.reverbMix * 100));
     gPrefs.putInt("rvbsize", (int)(s.reverbSize * 100));
 
@@ -260,6 +266,7 @@ void applyPatch(int slot) {
     gCfg.synth.vibratoCents = 0.f;
     gCfg.synth.cutoffModOct = 0.f;
     gCfg.synth.volMod = 1.f;
+    gCfg.synth.tempoBpm = (float)gCfg.jamBpm;  // driven live, not baked
     gCfg.synth.voiceCount =
         (uint8_t)clampT<int>(gCfg.synth.voiceCount, 1, dsp::kMaxVoices);  // blob hygiene
     gCfg.currentPatch = (uint8_t)slot;
@@ -277,6 +284,7 @@ bool savePatch(int slot) {
     b.synth.vibratoCents = 0.f;
     b.synth.cutoffModOct = 0.f;
     b.synth.volMod = 1.f;
+    b.synth.tempoBpm = 120.f;  // tempo is live, not part of the saved sound
     b.tiltRouteB = (uint8_t)gCfg.tiltRouteB;  // v2: roll axis travels with the slot
     b.tiltDepthB = gCfg.tiltDepthB;
     char key[3];

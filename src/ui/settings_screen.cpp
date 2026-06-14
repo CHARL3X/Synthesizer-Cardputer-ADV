@@ -183,6 +183,71 @@ void aRes(int d) {
     s.resonance = clampT(s.resonance + d * 0.05f, 0.f, 0.95f);
 }
 
+// ---- the send-FX rack, now live-editable (and saved per slot like every
+// other sound param). Dial the space, fn+shift+letter to keep it.
+void fChorus(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().synth.chorusDepth * 100)); }
+void aChorus(int d) {
+    auto& s = store::get().synth;
+    s.chorusDepth = clampT(s.chorusDepth + d * 0.05f, 0.f, 1.f);
+}
+
+void fDelaySend(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().synth.delayMix * 100)); }
+void aDelaySend(int d) {
+    auto& s = store::get().synth;
+    s.delayMix = clampT(s.delayMix + d * 0.05f, 0.f, 1.f);
+}
+
+void fDelayTime(char* o, int c) {
+    auto& s = store::get().synth;
+    if (s.delaySync) snprintf(o, c, "%s (synced)", dsp::delaySyncName(s.delaySync));
+    else snprintf(o, c, "%d ms", (int)(s.delayTimeS * 1000));
+}
+void aDelayTime(int d) {
+    auto& s = store::get().synth;
+    s.delayTimeS = (float)clampT((int)(s.delayTimeS * 1000) + d * 10, 10, 600) / 1000.f;
+}
+
+void fDelaySync(char* o, int c) { snprintf(o, c, "%s", dsp::delaySyncName(store::get().synth.delaySync)); }
+void aDelaySync(int d) {
+    auto& s = store::get().synth;
+    s.delaySync = (uint8_t)(((int)s.delaySync + d + dsp::kDelaySyncCount) % dsp::kDelaySyncCount);
+}
+
+void fDelayFb(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().synth.delayFb * 100)); }
+void aDelayFb(int d) {
+    auto& s = store::get().synth;
+    s.delayFb = clampT(s.delayFb + d * 0.05f, 0.f, 0.9f);
+}
+
+void fReverbSend(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().synth.reverbMix * 100)); }
+void aReverbSend(int d) {
+    auto& s = store::get().synth;
+    s.reverbMix = clampT(s.reverbMix + d * 0.05f, 0.f, 1.f);
+}
+
+void fReverbSize(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().synth.reverbSize * 100)); }
+void aReverbSize(int d) {
+    auto& s = store::get().synth;
+    s.reverbSize = clampT(s.reverbSize + d * 0.05f, 0.f, 1.f);
+}
+
+// Tap tempo: each press here is a beat — two or more in time set the jam BPM,
+// which drives the progression AND the tempo-synced delay.
+void fTapTempo(char* o, int c) { snprintf(o, c, "%d bpm  (tap , /)", store::get().jamBpm); }
+void aTapTempo(int) {
+    static uint32_t lastTap = 0;
+    static float avgInt = 0.f;
+    const uint32_t now = millis();
+    if (lastTap != 0 && now - lastTap < 2000) {
+        const float interval = (float)(now - lastTap);
+        avgInt = avgInt > 0.f ? avgInt * 0.5f + interval * 0.5f : interval;
+        store::get().jamBpm = (uint16_t)clampT((int)(60000.f / avgInt + 0.5f), 40, 240);
+    } else {
+        avgInt = 0.f;  // first tap of a fresh series
+    }
+    lastTap = now;
+}
+
 void fScopeMode(char* o, int c) {
     snprintf(o, c, "%s", store::get().scopeMode == 0 ? "waveform" : "pitch trail");
 }
@@ -210,6 +275,7 @@ const Item kItems[] = {
     {"Drone voicing", fDroneVoice, aDroneVoice},
     {"Jam motion", fJamMotion, aJamMotion},
     {"Jam tempo", fJamBpm, aJamBpm},
+    {"Tap tempo", fTapTempo, aTapTempo},
     {"Chord length", fJamChord, aJamChord},
     {"Octave keys", fOctGlide, aOctGlide},
     {"Tilt f/b route", fTilt, aTilt},
@@ -221,6 +287,13 @@ const Item kItems[] = {
     {"Bend time", fBendMs, aBendMs},
     {"Fat detune", fDetune, aDetune},
     {"Resonance", fRes, aRes},
+    {"Chorus", fChorus, aChorus},
+    {"Delay send", fDelaySend, aDelaySend},
+    {"Delay time", fDelayTime, aDelayTime},
+    {"Delay sync", fDelaySync, aDelaySync},
+    {"Delay fb", fDelayFb, aDelayFb},
+    {"Reverb send", fReverbSend, aReverbSend},
+    {"Reverb size", fReverbSize, aReverbSize},
     {"Display", fScopeMode, aScopeMode},
     {"Boot sound", fBoot, aBoot},
     {"Intro card", fIntro, aIntro},
@@ -316,6 +389,7 @@ void run(M5Canvas& canvas) {
         if (hit(kRight) || hit(kIncAlt) || hit(kEnter)) dir = +1;
         if (dir != 0) {
             kItems[sel].adjust(dir);
+            store::get().synth.tempoBpm = (float)store::get().jamBpm;  // synced-delay preview
             store::markDirty();
             audio::setParams(store::get().synth);
         }

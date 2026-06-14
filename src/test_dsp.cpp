@@ -172,6 +172,26 @@ int main() {
         peakOf(s, 40);
     }
 
+    // ---- tempo-synced delay: division math + bounded render ----------------
+    CHECK(delaySyncBeats(2) > 0.74f && delaySyncBeats(2) < 0.76f, "dotted-eighth = 0.75 beat");
+    CHECK(delaySyncBeats(0) == 0.f, "division 0 = free");
+    CHECK(delaySyncName(3)[0] == '1' && delaySyncName(0)[0] == 'f', "division labels");
+    {
+        p = SynthParams();
+        p.delayMix = 0.5f;
+        p.delayFb = 0.5f;
+        p.delaySync = 2;     // dotted-eighth
+        p.tempoBpm = 120.f;  // beat 500 ms -> echo 375 ms, fits the 600 ms line
+        s.setParams(p);
+        s.handleEvent(NoteEvent::make(NoteEvent::On, 5, 0xFF, false, 64.f));
+        const float pk = peakOf(s, 40);
+        CHECK(pk > 0.01f && pk < 1.4f, "synced delay renders in range");
+        s.handleEvent(NoteEvent::make(NoteEvent::AllOff, 0, 0xFF, false, 0.f));
+        peakOf(s, 20);
+        p = SynthParams();
+        s.setParams(p);
+    }
+
     // ---- drones: the layering jam ------------------------------------------
     // A latched drone must survive the lead's voice-cap stealing and let go
     // with a drawn-out tail.

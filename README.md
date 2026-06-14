@@ -219,6 +219,27 @@ progression* (needs *Jam rows* on):
 Pick PAD, STRINGS, or ORGAN for the bed, set a slow tempo, tap four chords,
 and you've got a song to solo on in about ten seconds.
 
+## Tempo, the synced delay, and the live FX rack
+
+One tempo (the *Jam tempo*) drives both the progression and the echo. Two
+things make a solo over that backing sound *produced*:
+
+- **Tap tempo** (settings → *Tap tempo*): tap `,` or `/` in time and the BPM
+  follows your hand — set the groove by feel, no number-nudging.
+- **Tempo-synced delay** (settings → *Delay sync*): lock the echo to a musical
+  division — `1/4`, **`1/8.` (dotted eighth — the Edge/Gilmour trick)**, `1/8`,
+  `1/8T`, or `1/16` — and every repeat lands on the beat. LEAD, HARP and GLASS
+  ship with it on; switch to LEAD over a progression and the dotted-eighths
+  cascade right in the pocket. (Set it to `free` for a plain ms delay.) If a
+  division is too long for the delay line at a slow tempo it folds down an
+  octave, so it stays on the grid instead of clipping.
+
+And the whole **send-FX rack is now live on-device** (settings): *Chorus*,
+*Delay send / time / sync / feedback*, *Reverb send / size*. Dial the space to
+taste and `fn`+`shift`+letter saves it with the slot, like every other sound
+parameter. The effects were the one thing you couldn't reach before; now
+nothing about the sound is off-limits.
+
 ## The philosophy, encoded
 
 - **The skill gap is the product.** Basic play takes minutes (scale lock +
@@ -236,10 +257,13 @@ and you've got a song to solo on in about ten seconds.
   And a pocket instrument that dies mid-jam without warning is the same sin:
   below 20% battery the perform screen says so (blinking red at 10%), and
   settings always shows the exact percentage.
-- **Minimal onboard effects.** A lowpass filter with resonance, soft
-  saturation, and a speaker-protecting highpass. Loop and process
-  externally, like we said — the instrument's identity is its sounds and
-  how it plays, not an effects rack. (Omnichord rule.)
+- **Effects in service of the sound, not a rack to get lost in.** A per-voice
+  lowpass with resonance, soft saturation and a speaker-protecting highpass,
+  plus one shared send block — chorus, a tempo-synced delay, and a small
+  reverb. Every send is editable and saved per slot, but the tunings are
+  curated and the defaults do the work: the identity is still the sounds and
+  how it plays, not knob-twiddling. (The Omnichord rule, with a delay that
+  finally locks to the beat.)
 
 ## Quick start
 
@@ -352,6 +376,9 @@ firmware never touches raw I2S and why the library versions are pinned.
 | sound slots | 10, factory + user overrides | GLIDE | fn+q..p, fn+shift+q..p |
 | filter env (atk/dec/depth) | 1ms–2s / 10ms–2s / 0–3+ oct | per sound | settings*/saved in sound |
 | sub / noise / drive / auto-vib | 0–1 / 0–1 / 1–8 / cents | per sound | saved in sound |
+| chorus / delay / reverb send | 0–100% each | per sound | settings (live) |
+| delay time / sync / feedback | 10–600ms / free+5 divisions / 0–90% | per sound | settings (live) |
+| tap tempo | 40–240 bpm, tapped | — | settings |
 | tilt routing | off / cutoff / vibrato / volume | per sound | settings, enter toggles |
 | tilt depth | 0–100% | per sound | settings |
 | tilt center | calibrated "flat" | 0 | settings (hold + set) |

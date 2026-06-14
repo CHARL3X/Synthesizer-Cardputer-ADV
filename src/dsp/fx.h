@@ -35,7 +35,9 @@ private:
     float chLfo_ = 0.f;                        // LFO phase, radians
 
     // ---- delay -----------------------------------------------------------
-    static constexpr int kDelayMax = 9600;     // 300 ms @ 32k
+    static constexpr int kDelayMax = 19200;    // 600 ms @ 32k — long enough for
+                                               // a tempo-synced echo (e.g. a
+                                               // dotted-eighth down to ~75 bpm)
     float dlBuf_[kDelayMax] = {0.f};
     int   dlW_ = 0;
     float dlDamp_ = 0.f;                        // one-pole state in the fb path

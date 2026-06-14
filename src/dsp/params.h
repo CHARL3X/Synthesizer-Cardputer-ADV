@@ -29,6 +29,32 @@ inline const char* tiltRouteName(TiltRoute r) {
     }
 }
 
+// Tempo-synced delay divisions. 0 = free (the echo uses delayTimeS); 1.. lock
+// the echo to a fraction of a quarter-note beat at SynthParams::tempoBpm, so a
+// solo over the jam/progression sits in the pocket. The dotted-eighth (2) is
+// the classic "lock the lead to the groove" repeat.
+inline float delaySyncBeats(uint8_t d) {
+    switch (d) {
+        case 1: return 1.0f;        // 1/4
+        case 2: return 0.75f;       // 1/8. (dotted eighth)
+        case 3: return 0.5f;        // 1/8
+        case 4: return 1.f / 3.f;   // 1/8 triplet
+        case 5: return 0.25f;       // 1/16
+        default: return 0.f;        // free
+    }
+}
+constexpr uint8_t kDelaySyncCount = 6;  // free + five divisions
+inline const char* delaySyncName(uint8_t d) {
+    switch (d) {
+        case 1: return "1/4";
+        case 2: return "1/8.";
+        case 3: return "1/8";
+        case 4: return "1/8T";
+        case 5: return "1/16";
+        default: return "free";
+    }
+}
+
 inline const char* waveformName(Waveform w) {
     switch (w) {
         case Waveform::Sine:     return "sine";
@@ -79,12 +105,17 @@ struct SynthParams {
     float delayFb     = 0.35f; // 0..0.9 echo regeneration
     float reverbMix   = 0.f;   // 0..1 reverb send level
     float reverbSize  = 0.6f;  // 0..1 tail length / room size
+    uint8_t delaySync = 0;     // 0 = free (delayTimeS); 1.. = tempo division
+                               // (locks the echo to tempoBpm — see delaySync*)
 
-    // live modulation, pre-summed by the UI thread each frame
+    // live modulation, pre-summed by the UI thread each frame (never persisted
+    // as sound state, reset by the patch-save hygiene)
     float bendCents    = 0.f;  // bend keys, ramped by UI
     float vibratoCents = 0.f;  // tilt->vibrato depth (0 = off)
     float cutoffModOct = 0.f;  // tilt->cutoff offset in octaves (-2..+2)
     float volMod       = 1.f;  // tilt->volume multiplier (0.25..1)
+    float tempoBpm     = 120.f;// the jam tempo, published each frame so a
+                               // synced delay locks to it
 };
 
 struct NoteEvent {

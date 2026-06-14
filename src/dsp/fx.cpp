@@ -95,7 +95,18 @@ void Fx::process(float* buf, int n, const SynthParams& p) {
     // ---- delay setup -----------------------------------------------------
     float dlSamp = 0.f, dlFb = 0.f;
     if (doDelay) {
-        dlSamp = p.delayTimeS * sr_;
+        // tempo-synced: lock the echo time to a beat fraction of tempoBpm so a
+        // solo over the jam sits in the pocket. Fold long divisions down an
+        // octave at a time until they fit the line — still on the grid.
+        float t = p.delayTimeS;
+        const float beats = delaySyncBeats(p.delaySync);
+        if (beats > 0.f) {
+            const float bpm = p.tempoBpm < 20.f ? 20.f : (p.tempoBpm > 300.f ? 300.f : p.tempoBpm);
+            t = beats * 60.f / bpm;
+            const float maxT = (float)(kDelayMax - 1) / sr_;
+            while (t > maxT) t *= 0.5f;
+        }
+        dlSamp = t * sr_;
         if (dlSamp < 1.f) dlSamp = 1.f;
         if (dlSamp > (float)(kDelayMax - 1)) dlSamp = (float)(kDelayMax - 1);
         dlFb = p.delayFb < 0.f ? 0.f : (p.delayFb > 0.9f ? 0.9f : p.delayFb);

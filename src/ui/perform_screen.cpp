@@ -100,6 +100,7 @@ void applyTilt() {
     s.cutoffModOct = cutOct;
     s.vibratoCents = vibCents;
     s.volMod = volMul;
+    s.tempoBpm = (float)c.jamBpm;  // publish the jam tempo for the synced delay
 }
 
 void drawStatus(M5Canvas& c) {
