@@ -40,7 +40,8 @@ it's already a tiny fretboard. So GLIDE treats it like one:
 
  `     exit                 fn (hold)    quick-edit layer
  tab   settings             shift (hold) momentary chromatic
- ctrl/opt octave -/+ (left thumb)        alt loop pedal (left thumb)
+ ctrl/opt volume -/+ (left thumb)        alt loop pedal (left thumb)
+ - / =    octave -/+
                                          (tap rec/play/dub, hold undo, fn+alt clear)
 
  fn + q..p         : switch between the ten sounds, live
@@ -142,8 +143,9 @@ hurdy-gurdy lineage). Settings → *Jam rows*:
 - Octave shifts sweep the drones along with everything else; panic (bksp)
   clears them.
 
-Off by default — the uniform grid is still the instrument you learn on.
-Jam rows are an arrangement you switch on when it's time to perform.
+On by default now (bottom row), with the **progression** motion ready — so out
+of the box you tap a chord loop on the bottom row and solo on the three above.
+Turn *Jam rows* off in settings for a plain uniform grid.
 
 ## The loop pedal
 
@@ -389,11 +391,11 @@ firmware never touches raw I2S and why the library versions are pinned.
 | cutoff / resonance | 80–12k Hz / 0–95% | 4k / 30% | fn+7 / settings |
 | voices | 1–8 | 6 | fn+8 |
 | bend range / bend time | 1–12 st / 50–1000 ms | 2 st / 250 ms | fn+9 / settings |
-| volume | 0–100% | 70% | fn+0 |
+| volume | 0–100% | 70% | ctrl/opt (left thumb) or fn+0 |
 | root / scale / row interval | C–B / 13 scales / 1–12 st | A / min pent / 4th | settings |
 | glide mode | legato-only / always | legato-only | settings (per sound) |
 | allocation | strings (mono rows) / free poly | strings | settings |
-| jam rows (drones) | off / bottom / bottom 2 | off | settings |
+| jam rows (drones) | off / bottom / bottom 2 | bottom | settings |
 | jam motion | sustained / pulse / arp / progression | progression | settings |
 | jam tempo / chord length | 40–240 bpm / 1–8 beats | 100 / 4 | settings |
 | octave keys | sweep (glide) / re-strike | sweep | settings |

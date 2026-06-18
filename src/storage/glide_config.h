@@ -31,9 +31,10 @@ struct GlideConfig {
     bool tiltOn = true;       // tilt expression on by default (single-axis)
     bool tiltDual = false;    // also use axis B (roll) — the 2D body, opt-in
     uint8_t currentPatch = 0; // active sound slot (fn+q..p)
-    uint8_t jamRows = 0;      // 0=off, 1..2 bottom rows become tap-to-latch
+    uint8_t jamRows = 1;      // 0=off, 1..2 bottom rows become tap-to-latch
                               // drones (-1 oct): the layering jam — backing
-                              // rings underneath while you solo above
+                              // rings underneath while you solo above. On by
+                              // default (bottom row) so the backing is ready.
     uint8_t droneVoicing = 2; // 0=single note, 1=+octave, 2=+fifth (power
                               // chord) — one drone key voices a fuller backing
     uint8_t jamMotion = 3;    // 0=sustained, 1=pulse (re-strike together),

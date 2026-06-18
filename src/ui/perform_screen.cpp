@@ -572,7 +572,7 @@ void drawIntro(M5Canvas& c) {
     c.drawString("play  : letter + number keys", x + 8, y + 20);
     c.drawString("slide : new key on the same row", x + 8, y + 31);
     c.drawString("[ ]   : bend    shift : chromatic", x + 8, y + 42);
-    c.drawString("fn+q-p: sounds  fn+1-0: edit", x + 8, y + 53);
+    c.drawString("fn+q-p: sounds  ctrl/opt: volume", x + 8, y + 53);
     c.setTextColor(theme::kGreen, theme::kPanel);
     c.drawString("press any note key to play", x + 8, y + 72);
 }

@@ -152,10 +152,24 @@ void begin() {
     gCfg.tiltDepthB = clampT<int>(gPrefs.getInt("tiltdepb", (int)(d.tiltDepthB * 100)), 0, 100) / 100.f;
     gCfg.tiltCenterB = clampT<int>(gPrefs.getInt("tiltctrb", 0), -1000, 1000) / 1000.f;
     gCfg.tiltOn = gPrefs.getBool("tilton", d.tiltOn);
+    // one-time: gyro expression is on by default now — no need to press enter.
+    // Adopt it once even on devices that saved tilt off (pre-2026-06-07).
+    if (!gPrefs.getBool("tilton2", false)) {
+        gCfg.tiltOn = true;
+        gPrefs.putBool("tilton", true);
+        gPrefs.putBool("tilton2", true);
+    }
     gCfg.tiltDual = gPrefs.getBool("tiltdual", d.tiltDual);
     gCfg.currentPatch = clampT<int>(gPrefs.getUChar("cpatch", d.currentPatch), 0,
                                     dsp::kPatchCount - 1);
     gCfg.jamRows = clampT<int>(gPrefs.getUChar("jamrows", d.jamRows), 0, 2);
+    // one-time: the jam (backing) row is now on by default — adopt it once even
+    // on devices that saved it off (the player's later choice still sticks).
+    if (!gPrefs.getBool("jamrows2", false)) {
+        gCfg.jamRows = 1;
+        gPrefs.putUChar("jamrows", 1);
+        gPrefs.putBool("jamrows2", true);
+    }
     gCfg.droneVoicing = clampT<int>(gPrefs.getUChar("dvoice", d.droneVoicing), 0, 2);
     gCfg.jamMotion = clampT<int>(gPrefs.getUChar("jammot", d.jamMotion), 0, 3);
     // one-time: progression became the default jam motion — adopt it once even

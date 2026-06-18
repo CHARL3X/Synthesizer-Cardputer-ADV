@@ -113,6 +113,9 @@ constexpr uint32_t kLoopHoldMs = 600;
 // pushes through the existing queue — the dsp/ engine stays untouched.
 uint32_t gLastBeatMs = 0;
 int gArpIdx = 0;
+int gArpPrevCd = -1;        // the arp note currently sounding (released before
+                           // the next strikes) so the run stays one-at-a-time
+constexpr uint8_t kJamArp = 2;  // jamMotion: arp (re-strike one per beat)
 uint32_t gBeatFlashAt = 0;  // last re-strike, for the grid-map beat blink
 int gBeatFlashCd = -1;      // which drone key fired (-1 = the whole chord)
 constexpr uint32_t kBeatFlashMs = 120;
@@ -217,9 +220,15 @@ void notePress(int cd, bool shiftHeld) {
         n.col = gGridCol[cd];
         n.chromAtPress = shiftHeld || !cfgr.layout.scaleLock;
         n.pitch = pitchFor(n);
-        // one key voices a fuller backing: the partner sits a fifth/octave up
-        n.droneVoicing = (int8_t)droneIntervalFor(cfgr.droneVoicing);
-        restrikeDrone(cd);  // fires primary (+ partner) as drone voices
+        if (cfgr.jamMotion == kJamArp) {
+            // arp: this key joins the pattern but stays SILENT until the beat
+            // clock voices it one-at-a-time — single notes, so the run is clean
+            n.droneVoicing = 0;
+        } else {
+            // sustained / pulse: ring now; a fuller backing adds a fifth/octave
+            n.droneVoicing = (int8_t)droneIntervalFor(cfgr.droneVoicing);
+            restrikeDrone(cd);  // fires primary (+ partner) as drone voices
+        }
         return;
     }
 
@@ -330,6 +339,8 @@ void clearAllNotes() {
         n.string = -1;
     }
     for (int l = 0; l < 4; ++l) gLaneDepth[l] = 0;
+    gArpPrevCd = -1;
+    gArpIdx = 0;
     gBendCents = 0.f;
     store::get().synth.bendCents = 0.f;
 }
@@ -410,6 +421,22 @@ void octaveShift(int dir) {
     snprintf(v, sizeof v, "%d", next);
     hud::show("OCTAVE", v, (next - 1) / 6.f);
     store::markDirty();
+}
+
+// Master volume on the left-thumb keys (ctrl/opt). Octave stays on -/=, so no
+// control is lost — the thumb pair was a redundant second octave mapping.
+// When the backing is locked it moves with the solo, so this stays a true
+// master, not just a solo trim.
+void adjustVolume(int dir) {
+    auto& g = store::get();
+    const float step = dir * 0.05f;
+    auto clamp01 = [](float x) { return x < 0.f ? 0.f : (x > 1.f ? 1.f : x); };
+    g.synth.masterVol = clamp01(g.synth.masterVol + step);
+    if (g.backingLocked) g.backingSynth.masterVol = clamp01(g.backingSynth.masterVol + step);
+    store::markDirty();
+    char v[12];
+    snprintf(v, sizeof v, "%d%%", (int)(g.synth.masterVol * 100));
+    hud::show("VOLUME", v, g.synth.masterVol);
 }
 
 // ---- tilt mode cycle --------------------------------------------------------
@@ -550,13 +577,26 @@ void jamTick(uint32_t nowMs) {
     static uint8_t prevMotion = 0;
     const bool progMode = cfgr.jamMotion == kJamProg && cfgr.jamRows > 0;
     if (!progMode && (prevMotion == kJamProg || gProgSounding)) silenceProg();
+    // leaving arp: drop the single note it was holding so it doesn't ring on
+    if (prevMotion == kJamArp && cfgr.jamMotion != kJamArp && gArpPrevCd >= 0) {
+        audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, (uint8_t)gArpPrevCd));
+        gArpPrevCd = -1;
+    }
     prevMotion = cfgr.jamMotion;
     if (progMode) { progTick(nowMs); gLastBeatMs = 0; return; }
 
     if (cfgr.jamMotion == 0 || cfgr.jamRows == 0) { gLastBeatMs = 0; return; }
     int drones[56];
     const int nd = collectDrones(drones);
-    if (nd == 0) { gLastBeatMs = 0; gArpIdx = 0; return; }
+    if (nd == 0) {
+        gLastBeatMs = 0;
+        gArpIdx = 0;
+        if (gArpPrevCd >= 0) {  // pattern emptied: stop the hanging arp note
+            audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, (uint8_t)gArpPrevCd));
+            gArpPrevCd = -1;
+        }
+        return;
+    }
 
     const uint32_t beatMs = 60000u / (cfgr.jamBpm < 20 ? 20 : cfgr.jamBpm);
     if (gLastBeatMs == 0) { gLastBeatMs = nowMs; return; }  // start the clock cleanly
@@ -567,10 +607,20 @@ void jamTick(uint32_t nowMs) {
     if (cfgr.jamMotion == 1) {            // pulse: re-strike the whole chord
         for (int i = 0; i < nd; ++i) restrikeDrone(drones[i]);
         gBeatFlashCd = -1;
-    } else {                              // arp: one drone per beat, low->high
+    } else {                              // arp: ONE note per beat, low->high —
+                                          // release the last before the next so
+                                          // it's a clean run, never a cluster
         gArpIdx %= nd;
-        restrikeDrone(drones[gArpIdx]);
-        gBeatFlashCd = drones[gArpIdx];
+        const int cd = drones[gArpIdx];
+        if (gArpPrevCd >= 0 && gArpPrevCd != cd)
+            audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, (uint8_t)gArpPrevCd));
+        dsp::NoteEvent ev = dsp::NoteEvent::make(dsp::NoteEvent::On, (uint8_t)cd, 0xFF, false,
+                                                 gNotes[cd].pitch);
+        ev.backing = true;  // protected + own bus, but releases at the normal
+                            // rate (not the long drone tail) so notes don't smear
+        audio::pushEvent(ev);
+        gArpPrevCd = cd;
+        gBeatFlashCd = cd;
         gArpIdx = (gArpIdx + 1) % nd;
     }
     gBeatFlashAt = nowMs;  // the grid map blinks the struck key(s)
@@ -742,10 +792,10 @@ Actions poll(uint32_t nowMs) {
                 else octaveShift(+1);
                 break;
             case kKeyCtrl:
-                octaveShift(-1);
+                adjustVolume(-1);  // left-thumb volume (octave stays on -/=)
                 break;
             case kKeyOpt:
-                octaveShift(+1);
+                adjustVolume(+1);
                 break;
             case kKeyBendDown:
                 if (gQuickEdit) {
