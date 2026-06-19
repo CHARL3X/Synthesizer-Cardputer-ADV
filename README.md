@@ -41,7 +41,7 @@ it's already a tiny fretboard. So GLIDE treats it like one:
  `     exit                 fn (hold)    quick-edit layer
  tab   settings             shift (hold) momentary chromatic
  ctrl/opt volume -/+ (left thumb)        alt loop pedal (left thumb)
- - / =    octave -/+
+ - / =    octave -/+          G0 (top button) hold = filter throw (muffle)
                                          (tap rec/play/dub, hold undo, fn+alt clear)
 
  fn + q..p         : switch between the ten sounds, live
@@ -75,7 +75,8 @@ it's already a tiny fretboard. So GLIDE treats it like one:
   voice's pitch drawn over time, scrolling across ~7 seconds, with root-note
   gridlines as fret markers. On an instrument about the space *between* the
   notes, this is the scope for the other axis — every glide, hammer-on and
-  bend becomes a visible curve (segments pulled by the bend keys draw amber).
+  bend becomes a visible curve (segments pulled by the bend keys draw amber),
+  and with tilt-vibrato on the line shimmers — you can *see* the wobble.
 
 ## The sounds
 

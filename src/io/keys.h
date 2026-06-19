@@ -41,6 +41,7 @@ float bendCentsNow();
 bool holdLatched();
 bool sustainActive();
 bool tiltLatched();  // mod-latch: tilt values frozen (long-press enter)
+bool triggerHeld();  // G0 boot button held = momentary filter throw
 
 // auto chord progression (jam motion = progression): is the mode live, how
 // many chord steps spelled, which is playing now (-1 = idle), each step's

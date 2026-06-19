@@ -138,6 +138,13 @@ void begin() {
     l.rootSemis = clampT<int>(gPrefs.getUChar("root", d.layout.rootSemis), 0, 11);
     l.scaleIdx = clampT<int>(gPrefs.getUChar("scale", d.layout.scaleIdx), 0, dsp::kScaleCount - 1);
     l.octave = clampT<int>(gPrefs.getChar("oct", d.layout.octave), 1, 7);
+    // one-time: the default base octave dropped to 3 — adopt it once even on
+    // devices that saved the old 4 (the player's later octave shifts persist).
+    if (!gPrefs.getBool("oct3", false)) {
+        l.octave = 3;
+        gPrefs.putChar("oct", 3);
+        gPrefs.putBool("oct3", true);
+    }
     l.rowIntervalSemis = clampT<int>(gPrefs.getUChar("rowint", d.layout.rowIntervalSemis), 1, 12);
     l.scaleLock = gPrefs.getBool("lock", d.layout.scaleLock);
 

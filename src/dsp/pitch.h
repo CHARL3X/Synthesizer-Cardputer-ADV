@@ -14,7 +14,8 @@ namespace dsp {
 struct Layout {
     uint8_t rootSemis = 9;        // A
     uint8_t scaleIdx = kDefaultScale;
-    int8_t  octave = 4;           // base octave of string 0, col 0
+    int8_t  octave = 3;           // base octave of string 0, col 0 (a touch low
+                                  // so there's room to solo up over a backing)
     uint8_t rowIntervalSemis = 5; // string-to-string interval (a fourth)
     bool    scaleLock = true;
 };

@@ -45,7 +45,9 @@ static float peakOf(Synth& s, int blocks) {
 
 int main() {
     // ---- pitch / layout math -------------------------------------------
-    Layout l;  // defaults: A minor pent, oct 4, row interval 5, lock on
+    Layout l;
+    l.octave = 4;  // pin oct 4 here so the A4=69 reference math below stays put
+                   // (the shipped default is oct 3; the math is the same shifted)
     CHECK(fabsf(gridToMidi(l, 0, 0, false) - 69.f) < 1e-4, "string0 col0 = A4 (69)");
     CHECK(fabsf(gridToMidi(l, 0, 1, false) - 72.f) < 1e-4, "A min pent degree 1 = C5");
     CHECK(fabsf(gridToMidi(l, 0, 5, false) - 81.f) < 1e-4, "degree 5 wraps the octave = A5");

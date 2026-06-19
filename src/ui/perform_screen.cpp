@@ -43,6 +43,7 @@ int gTrailPos = 0;
 bool gTrailInit = false;
 float gTrailCenter = 69.f;  // view center in MIDI, follows the lead slowly
 bool gTrailCenterSet = false;
+constexpr float kVibVisGain = 2.5f;  // visual exaggeration of the vibrato wobble
 
 // Add one tilt axis's contribution into the three mod accumulators. Cutoff is
 // additive (octaves), vibrato additive (cents); volume is multiplicative (a
@@ -221,15 +222,26 @@ void drawPitchTrail(M5Canvas& c) {
     }
 
     auto l = audio::lead();
-    float v = l.active ? l.pitchMidi : NAN;
+    const float base = l.active ? l.pitchMidi : NAN;
+    float v = base;
     if (l.active) {
         if (!gTrailCenterSet) {
-            gTrailCenter = v;
+            gTrailCenter = base;
             gTrailCenterSet = true;
         }
         // the view drifts after the lead; snaps faster if it ran off-screen
-        const float d = v - gTrailCenter;
+        const float d = base - gTrailCenter;
         gTrailCenter += d * (fabsf(d) > 12.f ? 0.3f : 0.05f);
+        // vibrato shimmer: a display-only LFO at the synth's ~5.5 Hz vibrato
+        // rate, scaled by the live vibrato depth (tilt + patch), so the trail
+        // visibly wobbles when tilt-vibrato is on. The note readout stays on
+        // `base` (no wobble) so the name doesn't flicker.
+        static float vibPhase = 0.f;
+        vibPhase += 6.2831853f * 5.5f / 30.f;
+        if (vibPhase > 6.2831853f) vibPhase -= 6.2831853f;
+        const auto& s = store::get().synth;
+        const float depthCents = s.vibratoCents + s.autoVibCents;
+        v = base + sinf(vibPhase) * depthCents * 0.01f * kVibVisGain;
     }
     gTrail[gTrailPos] = v;
     gTrailBend[gTrailPos] = fabsf(keys::bendCentsNow()) > 2.f ? 1 : 0;
@@ -621,7 +633,15 @@ void run() {
 
         applyTilt();
         // lead = live sound; backing = its frozen sound when the jam is locked
-        audio::setParams(cf.synth, cf.backingLocked ? cf.backingSynth : cf.synth);
+        dsp::SynthParams backParams = cf.backingLocked ? cf.backingSynth : cf.synth;
+        if (keys::triggerHeld()) {
+            // G0 = momentary FILTER THROW: dive the lowpass on both layers for a
+            // muffled "filtered-out" drop; release sweeps it back. The per-bus
+            // cutoff smoothers turn this into a fast sweep, not a hard switch.
+            cf.synth.cutoffModOct -= 4.5f;   // lead: ~4.5 octaves down
+            backParams.cutoffHz *= 0.06f;    // backing: a matched dive
+        }
+        audio::setParams(cf.synth, backParams);
         store::tick(frameStart);
 
         // onboard LED mirrors the lead voice: pitch -> hue, activity ->
@@ -647,6 +667,13 @@ void run() {
         drawHint(canvas);
         hud::draw(canvas, frameStart);
         if (!cf.seenIntro) drawIntro(canvas);
+        if (keys::triggerHeld()) {  // G0 filter throw engaged
+            canvas.setFont(&fonts::Font0);
+            canvas.setTextColor(theme::kAmber, theme::kBg);
+            canvas.setTextDatum(top_center);
+            canvas.drawString("FILTER", cfg::kScreenW / 2, kScopeY + 4);
+            canvas.setTextDatum(top_left);
+        }
         canvas.pushSprite(0, 0);
 
         const uint32_t spent = millis() - frameStart;

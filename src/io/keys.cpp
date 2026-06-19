@@ -95,6 +95,13 @@ float gBendCents = 0.f;
 bool gHoldLatch = false;
 bool gSustainHeld = false;
 
+// The G0 boot button (GPIO 0) doubles as a momentary performance trigger at
+// runtime: a FILTER THROW — hold it and the lowpass dives shut (muffled drop),
+// release and it sweeps back open. Idle is HIGH (pull-up) so the fail-safe is
+// "no effect" — a misread can never wedge the sound. Level-read each poll.
+constexpr int kBootBtnPin = 0;
+bool gTriggerHeld = false;
+
 // tilt key (enter): short tap cycles off->single->dual->off, long-press
 // toggles the mod-latch. Fired on RELEASE so the two gestures don't collide.
 bool gTiltLatched = false;
@@ -694,6 +701,7 @@ void adjustQuickParam(int idx, int dir, bool coarse) {
 void begin() {
     buildGridTables();
     memset(gLaneDepth, 0, sizeof gLaneDepth);
+    pinMode(kBootBtnPin, INPUT_PULLUP);  // G0 as a momentary gate (idle HIGH)
 }
 
 void resync() {
@@ -717,6 +725,7 @@ Actions poll(uint32_t nowMs) {
     auto& cfgr = store::get();
 
     M5Cardputer.update();
+    gTriggerHeld = (digitalRead(kBootBtnPin) == LOW);  // G0 held = filter throw
     uint64_t cur = 0;
     for (const auto& p : M5Cardputer.Keyboard.keyList()) cur |= 1ULL << code(p.y, p.x);
 
@@ -1021,6 +1030,7 @@ float bendCentsNow() { return gBendCents; }
 bool holdLatched() { return gHoldLatch; }
 bool sustainActive() { return gSustainHeld || gHoldLatch; }
 bool tiltLatched() { return gTiltLatched; }
+bool triggerHeld() { return gTriggerHeld; }  // G0 momentary filter throw
 
 // ---- auto chord progression view state --------------------------------------
 bool progActive() {
