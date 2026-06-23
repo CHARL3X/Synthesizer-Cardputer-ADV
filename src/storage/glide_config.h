@@ -13,6 +13,34 @@ namespace store {
 using TiltRoute = dsp::TiltRoute;  // moved into dsp so patches carry it
 using dsp::tiltRouteName;
 
+// The G0 top button is an assignable momentary performance macro (the "trigger
+// throw"). Like the tilt route, it picks one destination and a depth — but it's
+// a global gesture, not a per-patch personality, so it lives in GlideConfig.
+// Every action writes only into the per-frame live-mod fields (cutoffModOct,
+// bendCents) or a local param copy (drive), never into the saved sound.
+enum class TriggerAction : uint8_t { Muffle, Brighten, PitchDive, Drive, Count };
+
+inline const char* triggerActionName(uint8_t a) {
+    switch ((TriggerAction)a) {
+        case TriggerAction::Muffle:    return "muffle (filter dn)";
+        case TriggerAction::Brighten:  return "brighten (filter up)";
+        case TriggerAction::PitchDive: return "pitch dive";
+        case TriggerAction::Drive:     return "drive grit";
+        default:                       return "?";
+    }
+}
+
+// Short tag for the on-scope badge (≤6 chars to sit beside the loop status).
+inline const char* triggerActionTag(uint8_t a) {
+    switch ((TriggerAction)a) {
+        case TriggerAction::Muffle:    return "MUFFLE";
+        case TriggerAction::Brighten:  return "BRIGHT";
+        case TriggerAction::PitchDive: return "DIVE";
+        case TriggerAction::Drive:     return "GRIT";
+        default:                       return "TRIG";
+    }
+}
+
 struct GlideConfig {
     dsp::SynthParams synth;   // engine params (ADSR, glide, wave, filter...)
     dsp::Layout layout;       // key, scale, octave, row interval, lock
@@ -53,6 +81,13 @@ struct GlideConfig {
                               // point; watch a slide curve between the notes)
     bool bootSound = true;
     bool seenIntro = false;
+
+    // ---- G0 trigger macro ("filter throw" and friends) ---------------------
+    // Default reproduces the original behaviour (muffle, momentary) but at a
+    // gentler depth — the old fixed throw dove a touch too far.
+    uint8_t triggerAction = (uint8_t)TriggerAction::Muffle;
+    float   triggerDepth  = 0.70f;  // 0..1 — how hard the action drives
+    bool    triggerLatch  = false;  // false = momentary (hold), true = tap-latch
 
     // ---- solo/backing split (transient performance state, never persisted) --
     // When you switch sound (or shift octave) over a running jam, the backing

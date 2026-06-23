@@ -104,6 +104,42 @@ void applyTilt() {
     s.tempoBpm = (float)c.jamBpm;  // publish the jam tempo for the synced delay
 }
 
+inline float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+// The G0 trigger macro. Engaged is decided by the caller (momentary vs latch);
+// here we just drive the chosen action into the live param copies by `depth`
+// (0..1). Filter routes move both lead and backing; pitch/drive touch the lead
+// only, so the backing stays a steady bed (matching the bend/tilt rule).
+void applyTrigger(dsp::SynthParams& lead, dsp::SynthParams& back, uint8_t action, float depth) {
+    switch ((store::TriggerAction)action) {
+        case store::TriggerAction::Muffle: {  // lowpass dives shut — the classic throw
+            const float oct = -5.f * depth;
+            lead.cutoffModOct += oct;
+            back.cutoffHz = clampf(back.cutoffHz * exp2f(oct), 60.f, 12000.f);
+            break;
+        }
+        case store::TriggerAction::Brighten: {  // opposite throw: a resonant lift
+            // Just raising the corner is nearly inaudible when the patch is
+            // already open (a saw barely has top harmonics, and the 1 W speaker
+            // barely reproduces them). So push the cutoff up AND sweep resonance
+            // up with it — a singing peak as it opens is what you actually hear.
+            const float oct = 5.f * depth;
+            lead.cutoffModOct += oct;
+            lead.resonance = clampf(lead.resonance + depth * 0.6f, 0.f, 0.92f);
+            back.cutoffHz = clampf(back.cutoffHz * exp2f(oct), 60.f, 15000.f);
+            back.resonance = clampf(back.resonance + depth * 0.6f, 0.f, 0.92f);
+            break;
+        }
+        case store::TriggerAction::PitchDive:   // dive-bomb the lead, up to ~2 oct
+            lead.bendCents -= depth * 2400.f;
+            break;
+        case store::TriggerAction::Drive:       // shove the lead into the soft clipper
+            lead.drive = clampf(lead.drive + depth * 6.f, 1.f, 8.f);
+            break;
+        default: break;
+    }
+}
+
 void drawStatus(M5Canvas& c) {
     auto& cf = store::get();
     c.setFont(&fonts::Font0);
@@ -273,7 +309,10 @@ void drawPitchTrail(M5Canvas& c) {
     }
 
     // the trace, oldest at the left edge; segments drawn while the bend keys
-    // were pulling the pitch go amber — earned notes, marked
+    // were pulling the pitch go amber — earned notes, marked. Phosphor decay:
+    // the line fades from dim at the old (left) end to full at the new end, and
+    // the leading ~18px blend white-hot — it reads like a real CRT trace
+    // decaying behind the beam instead of a flat painted line.
     int prevY = 0;
     bool prevValid = false;
     for (int x = 0; x < kTraceW; ++x) {
@@ -284,7 +323,12 @@ void drawPitchTrail(M5Canvas& c) {
             continue;
         }
         const int y = yOf(m);
-        const uint16_t col = gTrailBend[idx] ? theme::kAmber : theme::kGreen;
+        const uint16_t baseCol = gTrailBend[idx] ? theme::kAmber : theme::kGreen;
+        const uint8_t decay = (uint8_t)(40 + (uint32_t)x * 215 / kTraceW);  // old->new
+        uint16_t col = theme::scale(baseCol, decay);
+        const int fromHead = kTraceW - 1 - x;
+        if (fromHead < 18)  // white-hot tip, where the beam is now
+            col = theme::blend(col, theme::kIdle, (uint8_t)((18 - fromHead) * 8));
         if (prevValid)
             c.drawLine(kTraceX + x - 1, prevY, kTraceX + x, y, col);
         else
@@ -292,8 +336,39 @@ void drawPitchTrail(M5Canvas& c) {
         prevY = y;
         prevValid = true;
     }
-    // bright head where the pitch is right now
-    if (prevValid) c.fillRect(kTraceX + kTraceW - 2, prevY - 1, 3, 3, theme::kIdle);
+    // the beam head: a hot core over a faint vertical bloom
+    if (prevValid) {
+        const int hx = kTraceX + kTraceW - 2;
+        c.drawFastVLine(hx, prevY - 3, 7, theme::scale(theme::kGreen, 55));
+        c.fillRect(hx - 1, prevY - 1, 3, 3, theme::kIdle);
+    }
+}
+
+// CRT depth: a slow phosphor "refresh" sheen drifting down the scope, plus
+// bevelled glass corners. Pure atmosphere — kept faint so it never fights the
+// trace. Overlaid on top of the scope, skipped during the quick-edit panel.
+void drawCrt(M5Canvas& c, uint32_t now) {
+    const int x0 = kTraceX, x1 = kTraceX + kTraceW - 1;
+    const int y0 = kScopeY, y1 = kScopeY + kScopeH - 1;
+
+    // drifting refresh sheen: a faint bright band, one slow pass every ~3.7 s
+    const int sy = y0 + (int)((now / 45) % (uint32_t)kScopeH);
+    const uint16_t sheen = theme::scale(theme::kGreen, 26);
+    const uint16_t sheenDim = theme::scale(theme::kGreen, 12);
+    if (sy - 1 >= y0) c.drawFastHLine(x0, sy - 1, kTraceW, sheenDim);
+    c.drawFastHLine(x0, sy, kTraceW, sheen);
+    if (sy + 1 <= y1) c.drawFastHLine(x0, sy + 1, kTraceW, sheenDim);
+
+    // bevelled glass corners — a 45° chamfer masked back to black, so the scope
+    // seats in its bezel like a little tube screen
+    const int r = 7;
+    for (int i = 0; i < r; ++i) {
+        const int w = r - i;
+        c.drawFastHLine(x0, y0 + i, w, theme::kBg);              // top-left
+        c.drawFastHLine(x1 - w + 1, y0 + i, w, theme::kBg);      // top-right
+        c.drawFastHLine(x0, y1 - i, w, theme::kBg);              // bottom-left
+        c.drawFastHLine(x1 - w + 1, y1 - i, w, theme::kBg);      // bottom-right
+    }
 }
 
 void drawScope(M5Canvas& c, uint32_t now) {
@@ -632,16 +707,22 @@ void run() {
         }
 
         applyTilt();
-        // lead = live sound; backing = its frozen sound when the jam is locked
+        // lead = live sound; backing = its frozen sound when the jam is locked.
+        // Both are local copies so the G0 trigger macro never bakes into the
+        // saved sound (drive especially is a real param, not a live-mod field).
+        dsp::SynthParams leadParams = cf.synth;
         dsp::SynthParams backParams = cf.backingLocked ? cf.backingSynth : cf.synth;
-        if (keys::triggerHeld()) {
-            // G0 = momentary FILTER THROW: dive the lowpass on both layers for a
-            // muffled "filtered-out" drop; release sweeps it back. The per-bus
-            // cutoff smoothers turn this into a fast sweep, not a hard switch.
-            cf.synth.cutoffModOct -= 4.5f;   // lead: ~4.5 octaves down
-            backParams.cutoffHz *= 0.06f;    // backing: a matched dive
-        }
-        audio::setParams(cf.synth, backParams);
+
+        // G0 trigger macro: momentary reads the level; latch toggles on each
+        // press (rising edge), so a tap arms it and a second tap releases.
+        const bool trigRaw = keys::triggerHeld();
+        static bool trigPrev = false, trigLatched = false;
+        if (trigRaw && !trigPrev) trigLatched = !trigLatched;
+        trigPrev = trigRaw;
+        const bool trigEngaged = cf.triggerLatch ? trigLatched : trigRaw;
+        if (trigEngaged)
+            applyTrigger(leadParams, backParams, cf.triggerAction, cf.triggerDepth);
+        audio::setParams(leadParams, backParams);
         store::tick(frameStart);
 
         // onboard LED mirrors the lead voice: pitch -> hue, activity ->
@@ -659,6 +740,7 @@ void run() {
         canvas.fillScreen(theme::kBg);
         drawStatus(canvas);
         drawScope(canvas, frameStart);
+        if (!keys::quickEditActive()) drawCrt(canvas, frameStart);  // CRT atmosphere over the trace
         drawReadout(canvas);
         drawLoop(canvas, frameStart);
         drawProg(canvas, frameStart);
@@ -667,11 +749,14 @@ void run() {
         drawHint(canvas);
         hud::draw(canvas, frameStart);
         if (!cf.seenIntro) drawIntro(canvas);
-        if (keys::triggerHeld()) {  // G0 filter throw engaged
+        if (trigEngaged) {  // G0 trigger macro engaged — name the action
+            char tb[12];
+            snprintf(tb, sizeof tb, "%s%s", store::triggerActionTag(cf.triggerAction),
+                     cf.triggerLatch ? "*" : "");
             canvas.setFont(&fonts::Font0);
             canvas.setTextColor(theme::kAmber, theme::kBg);
             canvas.setTextDatum(top_center);
-            canvas.drawString("FILTER", cfg::kScreenW / 2, kScopeY + 4);
+            canvas.drawString(tb, cfg::kScreenW / 2, kScopeY + 4);
             canvas.setTextDatum(top_left);
         }
         canvas.pushSprite(0, 0);

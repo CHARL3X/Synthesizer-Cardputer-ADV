@@ -134,6 +134,19 @@ void begin() {
     s.reverbMix   = clampT<int>(gPrefs.getInt("rvbmix", (int)(d.synth.reverbMix * 100)), 0, 100) / 100.f;
     s.reverbSize  = clampT<int>(gPrefs.getInt("rvbsize", (int)(d.synth.reverbSize * 100)), 0, 100) / 100.f;
 
+    // patch character (filter env / sub / noise / drive / auto-vibrato). These
+    // are as much "the live sound" as the FX above and must survive a reboot
+    // the same way — without them a tweaked or character-heavy patch reverts
+    // toward the neutral GLIDE tone on power-up. Seeded once from the current
+    // patch below (the "schar" migration) for devices that predate this.
+    s.fenvAtkS    = clampT<int>(gPrefs.getInt("fatk", (int)(d.synth.fenvAtkS * 1000)), 1, 2000) / 1000.f;
+    s.fenvDecS    = clampT<int>(gPrefs.getInt("fdec", (int)(d.synth.fenvDecS * 1000)), 10, 2000) / 1000.f;
+    s.fenvOct     = clampT<int>(gPrefs.getInt("fenv", (int)(d.synth.fenvOct * 100)), 0, 600) / 100.f;
+    s.subLevel    = clampT<int>(gPrefs.getInt("sub", (int)(d.synth.subLevel * 100)), 0, 100) / 100.f;
+    s.noiseLevel  = clampT<int>(gPrefs.getInt("noise", (int)(d.synth.noiseLevel * 100)), 0, 100) / 100.f;
+    s.drive       = clampT<int>(gPrefs.getInt("drive", (int)(d.synth.drive * 100)), 100, 800) / 100.f;
+    s.autoVibCents = (float)clampT<int>(gPrefs.getInt("avib", (int)d.synth.autoVibCents), 0, 100);
+
     auto& l = gCfg.layout;
     l.rootSemis = clampT<int>(gPrefs.getUChar("root", d.layout.rootSemis), 0, 11);
     l.scaleIdx = clampT<int>(gPrefs.getUChar("scale", d.layout.scaleIdx), 0, dsp::kScaleCount - 1);
@@ -169,6 +182,36 @@ void begin() {
     gCfg.tiltDual = gPrefs.getBool("tiltdual", d.tiltDual);
     gCfg.currentPatch = clampT<int>(gPrefs.getUChar("cpatch", d.currentPatch), 0,
                                     dsp::kPatchCount - 1);
+
+    // one-time: the patch-character fields above were never persisted before
+    // this build, so on a pre-existing device they'd load as neutral defaults
+    // (no filter env / sub / drive...) and then overwrite the real sound on the
+    // next save. Seed them ONCE from the current patch (override if present,
+    // else factory) — restoring correct character without touching the other
+    // flat-key fields the player may have tweaked. New saves persist them.
+    if (!gPrefs.getBool("schar", false)) {
+        char ck[3];
+        patchKey(gCfg.currentPatch, ck);
+        PatchBlob b;
+        const dsp::SynthParams src =
+            loadBlob(ck, b) ? b.synth : dsp::factoryPatches()[gCfg.currentPatch].synth;
+        s.fenvAtkS = src.fenvAtkS;
+        s.fenvDecS = src.fenvDecS;
+        s.fenvOct = src.fenvOct;
+        s.subLevel = src.subLevel;
+        s.noiseLevel = src.noiseLevel;
+        s.drive = src.drive;
+        s.autoVibCents = src.autoVibCents;
+        gPrefs.putInt("fatk", (int)(s.fenvAtkS * 1000));
+        gPrefs.putInt("fdec", (int)(s.fenvDecS * 1000));
+        gPrefs.putInt("fenv", (int)(s.fenvOct * 100));
+        gPrefs.putInt("sub", (int)(s.subLevel * 100));
+        gPrefs.putInt("noise", (int)(s.noiseLevel * 100));
+        gPrefs.putInt("drive", (int)(s.drive * 100));
+        gPrefs.putInt("avib", (int)s.autoVibCents);
+        gPrefs.putBool("schar", true);
+    }
+
     gCfg.jamRows = clampT<int>(gPrefs.getUChar("jamrows", d.jamRows), 0, 2);
     // one-time: the jam (backing) row is now on by default — adopt it once even
     // on devices that saved it off (the player's later choice still sticks).
@@ -201,6 +244,13 @@ void begin() {
     }
     gCfg.bootSound = gPrefs.getBool("boot", d.bootSound);
     gCfg.seenIntro = gPrefs.getBool("intro", d.seenIntro);
+
+    // G0 trigger macro (absent on pre-existing devices -> the muffle default,
+    // i.e. the original behaviour at the gentler default depth)
+    gCfg.triggerAction = clampT<int>(gPrefs.getUChar("trigact", d.triggerAction), 0,
+                                     (int)TriggerAction::Count - 1);
+    gCfg.triggerDepth = clampT<int>(gPrefs.getInt("trigdep", (int)(d.triggerDepth * 100)), 0, 100) / 100.f;
+    gCfg.triggerLatch = gPrefs.getBool("triglat", d.triggerLatch);
 }
 
 void persistNow() {
@@ -224,6 +274,13 @@ void persistNow() {
     gPrefs.putUChar("dlysync", s.delaySync);
     gPrefs.putInt("rvbmix", (int)(s.reverbMix * 100));
     gPrefs.putInt("rvbsize", (int)(s.reverbSize * 100));
+    gPrefs.putInt("fatk", (int)(s.fenvAtkS * 1000));
+    gPrefs.putInt("fdec", (int)(s.fenvDecS * 1000));
+    gPrefs.putInt("fenv", (int)(s.fenvOct * 100));
+    gPrefs.putInt("sub", (int)(s.subLevel * 100));
+    gPrefs.putInt("noise", (int)(s.noiseLevel * 100));
+    gPrefs.putInt("drive", (int)(s.drive * 100));
+    gPrefs.putInt("avib", (int)s.autoVibCents);
 
     const auto& l = gCfg.layout;
     gPrefs.putUChar("root", l.rootSemis);
@@ -253,6 +310,9 @@ void persistNow() {
     gPrefs.putUChar("scopemd", gCfg.scopeMode);
     gPrefs.putBool("boot", gCfg.bootSound);
     gPrefs.putBool("intro", gCfg.seenIntro);
+    gPrefs.putUChar("trigact", gCfg.triggerAction);
+    gPrefs.putInt("trigdep", (int)(gCfg.triggerDepth * 100));
+    gPrefs.putBool("triglat", gCfg.triggerLatch);
     gDirty = false;
 }
 

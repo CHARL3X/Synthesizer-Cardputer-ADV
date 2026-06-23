@@ -95,10 +95,12 @@ float gBendCents = 0.f;
 bool gHoldLatch = false;
 bool gSustainHeld = false;
 
-// The G0 boot button (GPIO 0) doubles as a momentary performance trigger at
-// runtime: a FILTER THROW — hold it and the lowpass dives shut (muffled drop),
-// release and it sweeps back open. Idle is HIGH (pull-up) so the fail-safe is
-// "no effect" — a misread can never wedge the sound. Level-read each poll.
+// The G0 boot button (GPIO 0) doubles as a performance trigger at runtime: an
+// assignable macro (the "trigger throw" — muffle/brighten/dive/grit, by default
+// a filter muffle). This layer only reports the raw held level; perform_screen
+// owns the action, depth and momentary-vs-latch decision. Idle is HIGH
+// (pull-up) so the fail-safe is "no effect" — a misread can never wedge the
+// sound. Level-read each poll.
 constexpr int kBootBtnPin = 0;
 bool gTriggerHeld = false;
 
@@ -725,7 +727,7 @@ Actions poll(uint32_t nowMs) {
     auto& cfgr = store::get();
 
     M5Cardputer.update();
-    gTriggerHeld = (digitalRead(kBootBtnPin) == LOW);  // G0 held = filter throw
+    gTriggerHeld = (digitalRead(kBootBtnPin) == LOW);  // G0 trigger macro, raw level
     uint64_t cur = 0;
     for (const auto& p : M5Cardputer.Keyboard.keyList()) cur |= 1ULL << code(p.y, p.x);
 
@@ -1030,7 +1032,7 @@ float bendCentsNow() { return gBendCents; }
 bool holdLatched() { return gHoldLatch; }
 bool sustainActive() { return gSustainHeld || gHoldLatch; }
 bool tiltLatched() { return gTiltLatched; }
-bool triggerHeld() { return gTriggerHeld; }  // G0 momentary filter throw
+bool triggerHeld() { return gTriggerHeld; }  // raw G0 level (trigger macro)
 
 // ---- auto chord progression view state --------------------------------------
 bool progActive() {

@@ -266,6 +266,24 @@ void aIntro(int) { store::get().seenIntro = !store::get().seenIntro; }
 void fReset(char* o, int c) { snprintf(o, c, "press , or /"); }
 void aReset(int) { store::resetDefaults(); }
 
+// G0 top-button macro: pick the action, how hard it drives, and whether it's
+// held (momentary) or tap-to-toggle (latch).
+void fTrigAct(char* o, int c) { snprintf(o, c, "%s", store::triggerActionName(store::get().triggerAction)); }
+void aTrigAct(int d) {
+    auto& g = store::get();
+    g.triggerAction = (uint8_t)(((int)g.triggerAction + d + (int)store::TriggerAction::Count) %
+                                (int)store::TriggerAction::Count);
+}
+
+void fTrigDepth(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().triggerDepth * 100)); }
+void aTrigDepth(int d) {
+    auto& g = store::get();
+    g.triggerDepth = clampT(g.triggerDepth + d * 0.05f, 0.f, 1.f);
+}
+
+void fTrigMode(char* o, int c) { snprintf(o, c, "%s", store::get().triggerLatch ? "latch (tap)" : "momentary"); }
+void aTrigMode(int) { store::get().triggerLatch = !store::get().triggerLatch; }
+
 const Item kItems[] = {
     // Sections (a null format = a non-selectable header the cursor skips).
     // fn+up/down jumps header-to-header so the deep list stays navigable.
@@ -302,6 +320,10 @@ const Item kItems[] = {
     {"Delay fb", fDelayFb, aDelayFb},
     {"Reverb send", fReverbSend, aReverbSend},
     {"Reverb size", fReverbSize, aReverbSize},
+    {"TRIGGER (G0 button)", nullptr, nullptr},
+    {"Trigger action", fTrigAct, aTrigAct},
+    {"Trigger depth", fTrigDepth, aTrigDepth},
+    {"Trigger mode", fTrigMode, aTrigMode},
     {"SYSTEM", nullptr, nullptr},
     {"Display", fScopeMode, aScopeMode},
     {"Boot sound", fBoot, aBoot},
@@ -445,7 +467,13 @@ void run(M5Canvas& canvas) {
             kItems[sel].adjust(dir);
             auto& g = store::get();
             g.synth.tempoBpm = (float)g.jamBpm;  // synced-delay preview
-            store::markDirty();
+            // Persist immediately, not just on exit: this is a pocket device and
+            // people change a setting then flick the hardware power switch — a
+            // debounced write would be lost. Settings edits are user-paced (no
+            // auto-repeat) and NVS skips unchanged keys, so a full write per
+            // press is cheap. (Perform-screen tweaks stay debounced; they can
+            // auto-repeat.)
+            store::persistNow();
             audio::setParams(g.synth, g.backingLocked ? g.backingSynth : g.synth);
         }
 

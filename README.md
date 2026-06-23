@@ -41,7 +41,7 @@ it's already a tiny fretboard. So GLIDE treats it like one:
  `     exit                 fn (hold)    quick-edit layer
  tab   settings             shift (hold) momentary chromatic
  ctrl/opt volume -/+ (left thumb)        alt loop pedal (left thumb)
- - / =    octave -/+          G0 (top button) hold = filter throw (muffle)
+ - / =    octave -/+          G0 (top button) = trigger macro (muffle by default)
                                          (tap rec/play/dub, hold undo, fn+alt clear)
 
  fn + q..p         : switch between the ten sounds, live
@@ -86,7 +86,7 @@ A `*` in the status bar means you've saved your own version over the slot
 
 | key | sound | character | tilt does |
 |-----|-------|-----------|-----------|
-| q | **GLIDE** | the signature saw | filter |
+| q | **GLIDE** | the signature dry saw — *literally the boot sound / engine default* | vibrato (roll: filter) |
 | w | **WHISTLE** | the digital slide whistle itself — sine, always gliding | vibrato |
 | e | **PLUCK** | filter-envelope pluck, slides on overlap | filter |
 | r | **BASS** | square + heavy sub-octave, dark | filter |
@@ -400,6 +400,7 @@ firmware never touches raw I2S and why the library versions are pinned.
 | jam motion | sustained / pulse / arp / progression | progression | settings |
 | jam tempo / chord length | 40–240 bpm / 1–8 beats | 100 / 4 | settings |
 | octave keys | sweep (glide) / re-strike | sweep | settings |
+| trigger action / depth / mode | muffle, brighten, pitch dive, drive grit / 0–100% / momentary, latch | muffle / 70% / momentary | settings (G0 button) |
 | sound slots | 10, factory + user overrides | GLIDE | fn+q..p, fn+shift+q..p |
 | filter env (atk/dec/depth) | 1ms–2s / 10ms–2s / 0–3+ oct | per sound | settings*/saved in sound |
 | sub / noise / drive / auto-vib | 0–1 / 0–1 / 1–8 / cents | per sound | saved in sound |

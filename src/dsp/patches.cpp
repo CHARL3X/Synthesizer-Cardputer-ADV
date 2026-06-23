@@ -18,37 +18,37 @@ void setName(Patch& p, const char* n) {
 // block — so every slot is something you'd actually reach for. ACID and ORGAN
 // are kept verbatim (the player asked); the other eight are new.
 void buildBank(Patch* P) {
-    // q — GLIDE: the signature, and the boot sound, so it has to be the "oh,
-    // nice" moment. A wide three-saw stack with a slow filter bloom on every
-    // note (fenv), gentle tube warmth, a deep chorus and a real room. Plays
-    // as a lush analog poly; the dual tilt (sing + wah) is the showcase.
+    // q — GLIDE: the signature, AND the literal power-on sound. It is therefore
+    // the engine's default tone, deliberately: a clean, dry saw — 4 kHz cutoff,
+    // a touch of resonance, no send FX, no filter bloom, no drive. Raw and
+    // immediate, the "original GLIDE tone." Selecting fn+q now lands you on
+    // exactly what you booted into (and what a factory reset gives), so the
+    // first sound and the boot sound can never diverge again. The trick: state
+    // NO synth overrides — a default-constructed Patch already holds the
+    // default SynthParams, so this slot == the engine default by construction.
+    // Only the tilt personality (sing on lean, brighten on roll) is set.
     {
         Patch& p = P[0];
         setName(p, "GLIDE");
-        auto& s = p.synth;
-        s.wave = Waveform::FatSaw;
-        s.detuneCents = 18.f;
-        s.drive = 1.7f;
-        s.cutoffHz = 3200.f;
-        s.resonance = 0.14f;
-        s.fenvOct = 1.2f;          // each note blooms open then settles
-        s.fenvDecS = 0.5f;
-        s.attackS = 0.012f;
-        s.decayS = 0.35f;
-        s.sustain = 0.70f;
-        s.releaseS = 0.5f;
-        s.glideS = 0.12f;
-        s.chorusDepth = 0.55f;
-        s.delayMix = 0.12f;
-        s.delayFb = 0.26f;
-        s.delaySync = 3;           // a gentle eighth-note shimmer in tempo
-        s.reverbMix = 0.28f;
-        s.reverbSize = 0.62f;
         p.tiltRoute = TiltRoute::Vibrato;
         p.tiltDepth = 0.55f;
         p.tiltRouteB = TiltRoute::Cutoff;
         p.tiltDepthB = 0.6f;
     }
+    // The lush "analog poly" remake of GLIDE that used to live in slot 0 — a
+    // wide three-saw stack with a slow per-note filter bloom, tube warmth, deep
+    // chorus and a real room. Genuinely nice, just not the raw default the
+    // player reaches for. Parked here verbatim as a ready-made candidate for
+    // the planned expanded preset bank (drop it into a new slot when the bank
+    // grows past ten):
+    //   s.wave = Waveform::FatSaw; s.detuneCents = 18.f; s.drive = 1.7f;
+    //   s.cutoffHz = 3200.f; s.resonance = 0.14f;
+    //   s.fenvOct = 1.2f; s.fenvDecS = 0.5f;
+    //   s.attackS = 0.012f; s.decayS = 0.35f; s.sustain = 0.70f; s.releaseS = 0.5f;
+    //   s.glideS = 0.12f;
+    //   s.chorusDepth = 0.55f; s.delayMix = 0.12f; s.delayFb = 0.26f; s.delaySync = 3;
+    //   s.reverbMix = 0.28f; s.reverbSize = 0.62f;
+    //   tiltRoute = Vibrato (0.55), tiltRouteB = Cutoff (0.6)
     // w — EPIANO: a mellow electric piano. Triangle body (few harmonics =
     // soft), a light tube drive for the Rhodes "bark," a faint env-gated
     // noise knock on the attack, and a short bright filter ping that decays
