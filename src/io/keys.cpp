@@ -39,6 +39,15 @@ constexpr int kKeyAlt = 44;        // alt   (the loop pedal, left thumb —
                                    // space already covers sustain)
 constexpr int kKeySpace = 55;      // space (sustain)
 
+// The ADV's TCA8418 keyboard controller buffers key events in a ~10-deep FIFO,
+// and M5Cardputer.update() pulls only ONE per call. At 30 fps a fast chord
+// (press + release = 2 events/key) can overflow the FIFO faster than it drains;
+// a dropped *release* event leaves a key stuck down, and an overflow can wedge
+// the controller's IRQ so input freezes with a note ringing. Draining the whole
+// queue every frame keeps the pressed-set honest. 12 > FIFO depth; once the
+// queue is empty updateKeyList() is a near-free no-op.
+constexpr int kKbDrainMax = 12;
+
 // note grid: code -> (string, col). string 0 = bottom row = lowest.
 // Physical x offsets per row give the fretboard stagger:
 //   y=0 (1..0) x1..10 | y=1 (q..p) x1..10 | y=2 (a..;) x2..11 | y=3 (z../) x3..12
@@ -116,6 +125,13 @@ constexpr uint32_t kTiltLongMs = 350;
 uint32_t gLoopPressMs = 0;
 bool gLoopHoldFired = false;
 constexpr uint32_t kLoopHoldMs = 600;
+
+// exit (`): reboots the device, and it sits top-left where it gets brushed
+// constantly — accidental reboots (and, via the boot splash, wiped sessions).
+// Require a deliberate hold; a tap just shows a hint.
+uint32_t gExitDownMs = 0;
+bool gExitFired = false;
+constexpr uint32_t kExitHoldMs = 700;
 
 // jam motion: a millis-paced beat clock on the UI thread re-strikes the
 // latched drones, turning the static bed into a living backing. Pure event
@@ -709,6 +725,7 @@ void begin() {
 void resync() {
     // a blocking screen consumed key events; rebuild edge state from scratch
     M5Cardputer.update();
+    for (int i = 0; i < kKbDrainMax; ++i) M5Cardputer.Keyboard.updateKeyList();
     gPrevMask = 0;
     for (const auto& p : M5Cardputer.Keyboard.keyList()) gPrevMask |= 1ULL << code(p.y, p.x);
     // enter is settings' increment key; if it's held across the exit there's no
@@ -716,6 +733,7 @@ void resync() {
     // latch (or cycle on release) until enter is released and pressed anew.
     gTiltLatchFired = true;
     gLoopHoldFired = true;  // same guard for the loop pedal
+    gExitFired = true;      // and the exit hold — needs a fresh press to fire
     gLastBeatMs = 0;  // restart the jam clock cleanly after the blocking screen
     gArpIdx = 0;
     gProgLastAdv = 0;  // re-arm the progression downbeat on return
@@ -727,6 +745,9 @@ Actions poll(uint32_t nowMs) {
     auto& cfgr = store::get();
 
     M5Cardputer.update();
+    // drain the rest of the TCA8418 FIFO this frame (see kKbDrainMax) so a fast
+    // chord can't overflow it into a stuck key / frozen controller
+    for (int i = 0; i < kKbDrainMax; ++i) M5Cardputer.Keyboard.updateKeyList();
     gTriggerHeld = (digitalRead(kBootBtnPin) == LOW);  // G0 trigger macro, raw level
     uint64_t cur = 0;
     for (const auto& p : M5Cardputer.Keyboard.keyList()) cur |= 1ULL << code(p.y, p.x);
@@ -735,6 +756,18 @@ Actions poll(uint32_t nowMs) {
     const uint64_t released = gPrevMask & ~cur;
     const float dtMs = gLastPollMs ? (float)(nowMs - gLastPollMs) : 16.f;
     gLastPollMs = nowMs;
+
+    // First-run intro card is modal: ANY key dismisses it, silently, and the
+    // key is consumed — no note at full volume, no accidental exit, just gone.
+    // (The perform loop still auto-times-out the card as a fallback.)
+    if (!cfgr.seenIntro) {
+        if (pressed) {
+            cfgr.seenIntro = true;
+            store::markDirty();
+        }
+        gPrevMask = cur;
+        return act;  // nothing else acts while the card is up
+    }
 
     const bool shiftHeld = held(cur, kKeyShift);
     gSustainHeld = held(cur, kKeySpace);  // alt is the loop pedal now
@@ -786,7 +819,11 @@ Actions poll(uint32_t nowMs) {
 
         switch (cd) {
             case kKeyExit:
-                act.exitApp = true;
+                // don't exit on the press — reboot is destructive and ` is too
+                // easy to brush. Stamp it; the hold check below fires the exit.
+                gExitDownMs = nowMs;
+                gExitFired = false;
+                hud::show("EXIT", "hold ` to exit", -1.f);
                 break;
             case kKeyTab:
                 act.openSettings = true;
@@ -928,6 +965,14 @@ Actions poll(uint32_t nowMs) {
         } else if (looper::state() != looper::State::Empty) {
             hud::show("LOOP", "no layers", -1.f);
         }
+    }
+
+    // ` held past the threshold -> exit (reboot). A tap only showed the hint,
+    // so a stray brush can no longer reboot you (and can't reach the boot-splash
+    // reset that was wiping sessions).
+    if (held(cur, kKeyExit) && !gExitFired && nowMs - gExitDownMs >= kExitHoldMs) {
+        gExitFired = true;
+        act.exitApp = true;
     }
 
     // sustain pedal lifted -> let go of everything not physically held

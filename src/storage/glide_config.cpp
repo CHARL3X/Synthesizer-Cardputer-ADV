@@ -341,6 +341,9 @@ bool patchHasOverride(int slot) {
 
 void applyPatch(int slot) {
     if (slot < 0 || slot >= dsp::kPatchCount) return;
+    // Master volume is the player's, not the sound's — keep it across a switch
+    // so picking a sound never jumps the level (and the level you set persists).
+    const float keepVol = gCfg.synth.masterVol;
     char key[3];
     patchKey(slot, key);
     PatchBlob b;
@@ -358,6 +361,7 @@ void applyPatch(int slot) {
         gCfg.tiltRouteB = p.tiltRouteB;
         gCfg.tiltDepthB = p.tiltDepthB;
     }
+    gCfg.synth.masterVol = keepVol;  // volume is the player's, not the patch's
     gCfg.synth.bendCents = 0.f;  // live-mod fields never come from a patch
     gCfg.synth.vibratoCents = 0.f;
     gCfg.synth.cutoffModOct = 0.f;

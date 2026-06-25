@@ -38,7 +38,7 @@ it's already a tiny fretboard. So GLIDE treats it like one:
  string 1      |  a  s  d  f  g  h  j  k  l  ;  |  ' scale lock      enter tilt
  string 0 (lo) |  z  x  c  v  b  n  m  ,  .  /  |  space sustain
 
- `     exit                 fn (hold)    quick-edit layer
+ `     exit (HOLD ~0.7s)     fn (hold)    quick-edit layer
  tab   settings             shift (hold) momentary chromatic
  ctrl/opt volume -/+ (left thumb)        alt loop pedal (left thumb)
  - / =    octave -/+          G0 (top button) = trigger macro (muffle by default)
@@ -313,10 +313,12 @@ partition). Three ways back:
 - settings → *Sound reset* — current slot back to factory
 - settings → *Reset defaults* — all settings back to factory (your saved
   sounds are kept)
-- **press backspace during the boot splash** — full factory reset, settings
-  AND saved sounds, even if stored state ever wedges the UI. (It must be a
-  press *during* the splash, not held from power-on — the ADV's keyboard
-  chip is event-driven and can't see a key that never changes.)
+- **press *and hold* backspace during the boot splash** — full factory reset,
+  settings AND saved sounds, even if stored state ever wedges the UI. Hold it
+  through the red "FACTORY RESET — keep holding" confirm bar (~1.5 s); release
+  at any point cancels. Deliberate on purpose: a stray tap used to wipe people's
+  sessions. (It must be a press made *during* the splash, then sustained — the
+  ADV's keyboard chip is event-driven and can't see a key held from power-on.)
 
 ## Before you trust it: the Phase 0 probe
 

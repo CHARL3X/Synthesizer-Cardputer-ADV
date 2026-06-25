@@ -7,7 +7,7 @@
 //   string 1      |  a s d f g h j k l ;  | ':scale-lock    enter:tilt
 //   string 0 (lo) |  z x c v b n m , . /  | space:sustain
 //
-//   ` exit   tab settings   fn(hold) quick-edit   shift(hold) chromatic
+//   `(hold) exit   tab settings   fn(hold) quick-edit   shift(hold) chromatic
 //   ctrl/opt volume-/+ (left thumb)   - = octave-/+   alt loop pedal
 //
 // In string mode each row is a mono lane: a new press while the lane sings
