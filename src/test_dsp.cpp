@@ -65,18 +65,83 @@ int main() {
     // ---- diatonic chord builder (the auto-progression backing) ----------
     {
         float ch[3];
-        // A min pent (default), lock on: stacked scale-thirds an octave under.
-        // base = 12*(4+1)+9-12 = 57 (A3); steps {0,3,5,7,10}: deg 0,2,4 -> 0,5,10
+        // A min pent (default), lock on: triads come from the HARMONY PARENT
+        // (natural minor), an octave under. base = 12*(4+1)+9-12 = 57 (A3).
+        // deg 0 -> snap to minor degree 0 -> minor triad 0,3,7 = A3,C4,E4.
         const int nc = chordPitches(l, 0, 0, false, ch, 3);
         CHECK(nc == 3, "chord builds three tones");
         CHECK(fabsf(ch[0] - 57.f) < 1e-4, "chord root = A3 (an octave under A4)");
-        CHECK(fabsf(ch[1] - 62.f) < 1e-4 && fabsf(ch[2] - 67.f) < 1e-4, "scale-third stack");
+        CHECK(fabsf(ch[1] - 60.f) < 1e-4 && fabsf(ch[2] - 64.f) < 1e-4,
+              "min pent backing = a real minor triad (not a quartal pile)");
         CHECK(ch[1] > ch[0] && ch[2] > ch[1], "chord tones ascend");
         // chromatic fallback (lock off / shift) = power voicing root+5th+8ve
         chordPitches(l, 0, 0, true, ch, 3);
         CHECK(fabsf(ch[1] - ch[0] - 7.f) < 1e-4, "chromatic chord has a fifth");
         CHECK(fabsf(ch[2] - ch[0] - 12.f) < 1e-4, "chromatic chord has an octave");
         CHECK(pitchClassName(57.f)[0] == 'A', "pitch-class label");
+
+        // Blues: the ♭5 "blue note" must never end up a chord tone — every
+        // backing triad is a consonant natural-minor triad (root, ♭3, 5), the
+        // same notes a min-pent progression makes, so solo-in-blues lines up.
+        Layout lb = l; lb.scaleIdx = SC_BLUES;
+        for (int colq = 0; colq < kScales[SC_BLUES].len; ++colq) {
+            const int bn = chordPitches(lb, 0, colq, false, ch, 3);
+            CHECK(bn == 3, "blues chord builds three tones");
+            const int third = (int)(ch[1] - ch[0] + 0.5f);
+            const int fifth = (int)(ch[2] - ch[0] + 0.5f);
+            CHECK((third == 3 || third == 4) && fifth == 7,
+                  "blues backing is a plain major/minor triad, never the ♭5");
+            for (int t = 0; t < 3; ++t) {
+                const int pcb = (((int)(ch[t] + 0.5f) - lb.rootSemis) % 12 + 12) % 12;
+                CHECK(pcb != 6, "no blue note (♭5) as a chord tone in the backing");
+            }
+        }
+        // A 7-note scale is its own parent: diatonic triads are untouched.
+        Layout lm = l; lm.scaleIdx = SC_MINOR;
+        chordPitches(lm, 0, 0, false, ch, 3);
+        CHECK(fabsf(ch[1] - ch[0] - 3.f) < 1e-4 && fabsf(ch[2] - ch[0] - 7.f) < 1e-4,
+              "natural-minor i is still a minor triad");
+    }
+
+    // ---- every scale's harmony parent is a sane, consonant 7-note scale -----
+    for (int si = 0; si < kScaleCount; ++si) {
+        const Scale& hp = kScales[kScales[si].harm];
+        CHECK(kScales[si].harm < kScaleCount, "harmony parent index in range");
+        CHECK(hp.len == 7, "harmony parent is a full 7-note diatonic scale");
+    }
+
+    // ---- chord builder is well-formed for EVERY scale and EVERY grid cell ---
+    // (edge sweep: no scale/position must ever produce garbage, a cluster, or a
+    // non-triad — the backing's "you can't hit a wrong note" promise, total.)
+    {
+        float ch[3];
+        bool sawDim = false;
+        for (int si = 0; si < kScaleCount; ++si) {
+            Layout ls = l; ls.scaleIdx = (uint8_t)si;
+            for (int st = 0; st < kGridStrings; ++st)
+                for (int co = 0; co < kGridCols; ++co) {
+                    // scale-lock branch: always a stack of two diatonic thirds
+                    const int nd = chordPitches(ls, st, co, false, ch, 3);
+                    CHECK(nd == 3, "every cell builds a 3-note chord");
+                    CHECK(ch[0] < ch[1] && ch[1] < ch[2], "chord tones strictly ascend");
+                    CHECK(ch[0] > 0.f && ch[2] < 200.f, "chord pitches are finite & in range");
+                    const int t1 = (int)(ch[1] - ch[0] + 0.5f);
+                    const int t2 = (int)(ch[2] - ch[1] + 0.5f);
+                    CHECK(t1 >= 3 && t1 <= 4 && t2 >= 3 && t2 <= 4,
+                          "chord is a real triad: two stacked thirds, never a cluster");
+                    if (t1 == 3 && t2 == 3) sawDim = true;  // diminished is allowed
+                    // chromatic branch: a power voicing, every cell, every scale
+                    chordPitches(ls, st, co, true, ch, 3);
+                    CHECK(fabsf(ch[1] - ch[0] - 7.f) < 1e-4 &&
+                          fabsf(ch[2] - ch[0] - 12.f) < 1e-4,
+                          "chromatic voicing is root+5th+8ve everywhere");
+                }
+        }
+        CHECK(sawDim, "the diatonic vii° still voices as a diminished triad");
+        // maxOut is honored (a smaller voice budget never overruns)
+        float two[2] = {-1.f, -1.f};
+        CHECK(chordPitches(l, 0, 0, false, two, 2) == 2, "respects maxOut < 3");
+        CHECK(chordPitches(l, 0, 0, false, two, 0) == 0, "maxOut 0 writes nothing");
     }
 
     // ---- scale tables are well-formed (incl. the v0.5 additions) ---------
