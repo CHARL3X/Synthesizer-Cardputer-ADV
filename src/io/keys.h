@@ -56,4 +56,10 @@ bool progCurrentCell(int& string, int& col);
 // re-sync edge state after a blocking screen (settings) ate the keyboard
 void resync();
 
+// Advance the living backing (jam motion / arp / chord progression / drones)
+// for one frame. poll() already does this every frame; a modal screen that
+// owns the loop instead of poll() (e.g. settings) calls this so the backing
+// keeps playing instead of freezing on one chord until the screen closes.
+void tickBacking(uint32_t nowMs);
+
 }  // namespace keys

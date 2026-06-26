@@ -14,7 +14,7 @@ import sys
 import os
 import re
 
-W, H = 230, 115
+W, H = 200, 100
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src/ui/glide_logo.h")
 SRC = os.path.join(ROOT, "support/logo_src")

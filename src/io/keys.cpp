@@ -172,6 +172,11 @@ uint32_t gRepeatStart = 0, gRepeatLast = 0;
 int gRepeatDir = 0;
 bool gRepeatCoarse = false;
 
+// Volume (left-thumb ctrl/opt) auto-repeat: hold to ramp instead of tapping.
+// Same DAS/ARR timing as the other repeating keys (cfg::kRepeat*).
+uint32_t gVolRepeatStart = 0, gVolRepeatLast = 0;
+int gVolRepeatDir = 0;
+
 inline bool held(uint64_t mask, int cd) { return (mask >> cd) & 1ULL; }
 
 float pitchFor(const HeldNote& n) {
@@ -734,10 +739,15 @@ void resync() {
     gTiltLatchFired = true;
     gLoopHoldFired = true;  // same guard for the loop pedal
     gExitFired = true;      // and the exit hold — needs a fresh press to fire
-    gLastBeatMs = 0;  // restart the jam clock cleanly after the blocking screen
-    gArpIdx = 0;
-    gProgLastAdv = 0;  // re-arm the progression downbeat on return
-    clearLeadNotes();  // drones (and the loop) ride through settings trips
+    // The jam clock is NOT reset here: settings now ticks the backing every
+    // frame (keys::tickBacking), so the progression/arp/drones play straight
+    // through and their clocks stay live — re-arming would re-strike a chord
+    // on return. progTick/jamTick self-resync if a frame was ever dropped.
+    clearLeadNotes();  // drones, loop, and progression ride through settings
+}
+
+void tickBacking(uint32_t nowMs) {
+    jamTick(nowMs);  // keep the living backing advancing while settings owns the loop
 }
 
 Actions poll(uint32_t nowMs) {
@@ -841,9 +851,13 @@ Actions poll(uint32_t nowMs) {
                 break;
             case kKeyCtrl:
                 adjustVolume(-1);  // left-thumb volume (octave stays on -/=)
+                gVolRepeatDir = -1;
+                gVolRepeatStart = gVolRepeatLast = nowMs;  // arm hold-to-ramp
                 break;
             case kKeyOpt:
                 adjustVolume(+1);
+                gVolRepeatDir = +1;
+                gVolRepeatStart = gVolRepeatLast = nowMs;
                 break;
             case kKeyBendDown:
                 if (gQuickEdit) {
@@ -904,6 +918,7 @@ Actions poll(uint32_t nowMs) {
             continue;
         }
         if (cd == kKeyBendDown || cd == kKeyBendUp) gRepeatDir = 0;
+        if (cd == kKeyCtrl || cd == kKeyOpt) gVolRepeatDir = 0;
         // tilt key released: if the long-press latch didn't fire, it was a
         // short tap -> cycle the tilt mode
         if (cd == kKeyTilt && !gTiltLatchFired) cycleTilt();
@@ -990,6 +1005,18 @@ Actions poll(uint32_t nowMs) {
         }
     } else if (!gQuickEdit) {
         gRepeatDir = 0;
+    }
+
+    // ---- volume auto-repeat -------------------------------------------------
+    // Hold ctrl/opt to ramp the master volume rather than tapping each step.
+    if (gVolRepeatDir != 0 && (held(cur, kKeyCtrl) || held(cur, kKeyOpt))) {
+        if (nowMs - gVolRepeatStart >= cfg::kRepeatDelayMs &&
+            nowMs - gVolRepeatLast >= cfg::kRepeatRateMs) {
+            gVolRepeatLast = nowMs;
+            adjustVolume(gVolRepeatDir);
+        }
+    } else {
+        gVolRepeatDir = 0;
     }
 
     // ---- bend ramp (level-sensitive: sampled every frame) --------------------
