@@ -4,6 +4,7 @@
 
 #include "../config.h"
 #include "../dsp/params.h"
+#include "../dsp/patches.h"
 #include "../dsp/scales.h"
 #include "../io/audio_engine.h"
 #include "../io/keys.h"
@@ -175,6 +176,21 @@ void aPatchReset(int) {
     const int slot = store::get().currentPatch;
     store::clearOverride(slot);
     store::applyPatch(slot);  // reload the factory sound immediately
+}
+
+// Blanket escape hatch: every saved slot back to factory in one tap, so you can
+// experiment fearlessly and always return to stock. Settings (layout, tilt,
+// jam...) are untouched — only the 10 sound overrides are dropped. The full
+// nuke (sounds AND settings) is still the boot-time BKSP factory reset.
+void fAllSoundsReset(char* o, int c) {
+    int n = 0;
+    for (int i = 0; i < dsp::kPatchCount; ++i) n += store::patchHasOverride(i) ? 1 : 0;
+    if (n > 0) snprintf(o, c, "%d saved -> stock", n);
+    else       snprintf(o, c, "all stock");
+}
+void aAllSoundsReset(int) {
+    for (int i = 0; i < dsp::kPatchCount; ++i) store::clearOverride(i);
+    store::applyPatch(store::get().currentPatch);  // reload the now-factory sound live
 }
 
 void fBendMs(char* o, int c) { snprintf(o, c, "%d ms", store::get().bendMs); }
@@ -509,6 +525,7 @@ const Item kItems[] = {
     {"Init sound", fInitSound, aInitSound},
     {"Randomize", fRandomize, aRandomize},
     {"Sound reset", fPatchReset, aPatchReset},
+    {"Reset all sounds", fAllSoundsReset, aAllSoundsReset},
     {"Bend time", fBendMs, aBendMs, true},
     {"Fat detune", fDetune, aDetune, true},
     {"Filter mode", fFilterMode, aFilterMode},
@@ -595,7 +612,8 @@ int buildVisible(int* vis) {  // indices of currently-shown rows (headers + non-
 bool isActionRow(int i) {
     if (isHeader(i)) return false;
     const auto a = kItems[i].adjust;
-    return a == aInitSound || a == aRandomize || a == aPatchReset || a == aReset;
+    return a == aInitSound || a == aRandomize || a == aPatchReset ||
+           a == aAllSoundsReset || a == aReset;
 }
 
 // Next selectable row in `dir`, skipping headers AND collapsed rows, wrapping.
