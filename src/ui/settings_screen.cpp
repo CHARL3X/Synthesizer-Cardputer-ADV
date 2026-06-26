@@ -18,6 +18,8 @@ namespace settings {
 namespace {
 
 bool gOpenHelp = false;  // set by the Help item; run() opens the modal (it owns the canvas)
+int gFlashRow = -1;      // a one-shot row blink confirming an action fired
+uint32_t gFlashUntil = 0;
 
 // positional key codes (y*14+x) — same convention as keys.cpp
 constexpr int kUp = 39;     // ;
@@ -555,6 +557,14 @@ int buildVisible(int* vis) {  // indices of currently-shown rows (headers + non-
     return nv;
 }
 
+// "Do something" rows that don't change a visible value — they get a one-shot
+// row blink so a tap reads as confirmed (the sound changes but the row text doesn't).
+bool isActionRow(int i) {
+    if (isHeader(i)) return false;
+    const auto a = kItems[i].adjust;
+    return a == aInitSound || a == aRandomize || a == aPatchReset || a == aReset;
+}
+
 // Next selectable row in `dir`, skipping headers AND collapsed rows, wrapping.
 int step(int from, int dir) {
     int i = from;
@@ -627,12 +637,16 @@ void draw(M5Canvas& c, int sel, int top) {
 
         c.setFont(&fonts::Font2);
         const bool isSel = (i == sel);
-        if (isSel) c.fillRect(0, y - 1, cfg::kScreenW, 13, theme::kPanel);
-        c.setTextColor(isSel ? theme::kAmber : theme::kDim, isSel ? theme::kPanel : theme::kBg);
+        const bool flash = (i == gFlashRow) && (millis() < gFlashUntil);  // one-shot confirm
+        const uint16_t rowBg = flash ? theme::kAmber : (isSel ? theme::kPanel : theme::kBg);
+        const uint16_t nameCol = flash ? theme::kBg : (isSel ? theme::kAmber : theme::kDim);
+        const uint16_t valCol = flash ? theme::kBg : (isSel ? theme::kIdle : theme::kDim);
+        if (flash || isSel) c.fillRect(0, y - 1, cfg::kScreenW, 13, rowBg);
+        c.setTextColor(nameCol, rowBg);
         c.drawString(kItems[i].name, 8, y);
         kItems[i].format(val, sizeof val);
         c.setTextDatum(top_right);
-        c.setTextColor(isSel ? theme::kIdle : theme::kDim, isSel ? theme::kPanel : theme::kBg);
+        c.setTextColor(valCol, rowBg);
         c.drawString(val, cfg::kScreenW - 8, y);
         c.setTextDatum(top_left);
     }
@@ -727,6 +741,7 @@ void run(M5Canvas& canvas) {
         }
 
         if (dir != 0 && !isHeader(sel)) {
+            if (isActionRow(sel)) { gFlashRow = sel; gFlashUntil = now + 160; }  // confirm the tap
             kItems[sel].adjust(dir);
             auto& g = store::get();
             g.synth.tempoBpm = (float)g.jamBpm;  // synced-delay preview
