@@ -35,6 +35,10 @@ public:
         return leadIdx_ >= 0 ? voices_[leadIdx_].currentPitch() + p_.bendCents * 0.01f : 0.f;
     }
     float leadGlide01() const { return leadIdx_ >= 0 ? voices_[leadIdx_].glide01() : 1.f; }
+    // lead envelope amplitude (~0..1.3) — the note's live loudness, for the scope
+    float leadLevel() const {
+        return leadIdx_ >= 0 && voices_[leadIdx_].active() ? voices_[leadIdx_].level() : 0.f;
+    }
     int heldVoices() const;
     int heldLeadVoices() const;  // held minus drones — what the cap governs
     int activeVoices() const;

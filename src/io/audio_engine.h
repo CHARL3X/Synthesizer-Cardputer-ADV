@@ -35,6 +35,7 @@ struct Lead {
     bool active;
     float pitchMidi;   // includes bend — tracks what you hear
     float glide01;     // 0..1 progress of the current slide
+    float level;       // lead envelope amplitude (~0..1.3) — the note's loudness
     uint8_t held;      // held voices (leads + drones)
     uint8_t leads;     // held lead voices — what the voice cap governs
     uint8_t sounding;  // held + release tails

@@ -39,6 +39,8 @@ float gScopeBuf[512];
 // (~7.5 s across the screen at 30 fps). NAN = silence gap.
 float gTrail[kTraceW];
 uint8_t gTrailBend[kTraceW];  // frames where the bend keys were deforming it
+uint8_t gTrailLev[kTraceW];   // lead envelope level per frame (0..255): drives the
+                              // trace's brightness + glow, so loudness is visible
 int gTrailPos = 0;
 bool gTrailInit = false;
 float gTrailCenter = 69.f;  // view center in MIDI, follows the lead slowly
@@ -255,6 +257,7 @@ void drawPitchTrail(M5Canvas& c) {
     if (!gTrailInit) {
         for (int i = 0; i < kTraceW; ++i) gTrail[i] = NAN;
         memset(gTrailBend, 0, sizeof gTrailBend);
+        memset(gTrailLev, 0, sizeof gTrailLev);
         gTrailPos = 0;
         gTrailCenterSet = false;
         gTrailInit = true;
@@ -284,6 +287,7 @@ void drawPitchTrail(M5Canvas& c) {
     }
     gTrail[gTrailPos] = v;
     gTrailBend[gTrailPos] = fabsf(keys::bendCentsNow()) > 2.f ? 1 : 0;
+    gTrailLev[gTrailPos] = (uint8_t)(l.active ? clampf(l.level * 180.f, 0.f, 255.f) : 0.f);
     gTrailPos = (gTrailPos + 1) % kTraceW;
 
     // 30-semitone window: ~2.5 octaves visible
@@ -327,8 +331,12 @@ void drawPitchTrail(M5Canvas& c) {
         }
         const int y = yOf(m);
         const uint16_t baseCol = gTrailBend[idx] ? theme::kAmber : theme::kGreen;
-        const uint8_t decay = (uint8_t)(40 + (uint32_t)x * 215 / kTraceW);  // old->new
-        uint16_t col = theme::scale(baseCol, decay);
+        const uint8_t age = (uint8_t)(40 + (uint32_t)x * 215 / kTraceW);  // old->new
+        const uint8_t lev = gTrailLev[idx];                              // loudness here
+        // loudness shapes brightness on top of the age fade: a loud note glows,
+        // a releasing/quiet one dims even when recent — the envelope made visible.
+        const uint8_t bright = (uint8_t)((uint32_t)age * (90 + (uint32_t)lev * 165 / 255) / 255);
+        uint16_t col = theme::scale(baseCol, bright);
         const int fromHead = kTraceW - 1 - x;
         if (fromHead < 18)  // white-hot tip, where the beam is now
             col = theme::blend(col, theme::kIdle, (uint8_t)((18 - fromHead) * 8));
@@ -336,13 +344,23 @@ void drawPitchTrail(M5Canvas& c) {
             c.drawLine(kTraceX + x - 1, prevY, kTraceX + x, y, col);
         else
             c.drawPixel(kTraceX + x, y, col);
+        // bloom: loud + recent segments bleed a faint halo above/below, so the
+        // bright part reads thick and glowing, then thins as the note releases.
+        if (lev > 110 && fromHead < 48) {
+            const uint16_t hcol = theme::scale(baseCol, (uint8_t)((uint32_t)bright * (lev - 110) / 220));
+            c.drawPixel(kTraceX + x, y - 1, hcol);
+            c.drawPixel(kTraceX + x, y + 1, hcol);
+        }
         prevY = y;
         prevValid = true;
     }
-    // the beam head: a hot core over a faint vertical bloom
+    // the beam head: a white core inside a layered green bloom (wide soft halo ->
+    // mid glow -> hot inner), so the live end glows before the trail fades behind it
     if (prevValid) {
         const int hx = kTraceX + kTraceW - 2;
-        c.drawFastVLine(hx, prevY - 3, 7, theme::scale(theme::kGreen, 55));
+        c.drawFastVLine(hx, prevY - 5, 11, theme::scale(theme::kGreen, 22));
+        c.drawFastVLine(hx, prevY - 3, 7, theme::scale(theme::kGreen, 70));
+        c.drawFastVLine(hx, prevY - 1, 3, theme::kGreen);
         c.fillRect(hx - 1, prevY - 1, 3, 3, theme::kIdle);
     }
 }
