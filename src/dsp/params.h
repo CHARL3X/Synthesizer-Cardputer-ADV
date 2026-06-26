@@ -67,6 +67,66 @@ inline const char* waveformName(Waveform w) {
     }
 }
 
+// ---- modulation matrix ----------------------------------------------------
+// A few mod SOURCES routed to DESTINATIONS by a depth — N×M sound-design space
+// from a handful of primitives. Everything defaults neutral (every slot None,
+// so the matrix sums to zero), which keeps a default SynthParams bit-for-bit
+// the original GLIDE tone. Tilt keeps its own dedicated routing (TiltRoute) for
+// now; these are NEW per-block sources layered on top, on the LEAD bus only.
+// Append-only enums (values are persisted in patches): add at the end, never
+// renumber. Tilt is intentionally NOT a Pitch-capable source (tilt is never
+// pitch bend — rejected on tape).
+enum class ModSource : uint8_t { None, LFO1, LFO2, ModEnv, KeyTrack, Bend, Count };
+enum class ModDest   : uint8_t { None, Pitch, Cutoff, Resonance, Amp, FenvDepth, Count };
+enum class LfoShape  : uint8_t { Sine, Tri, Saw, Square, SH, Count };
+
+inline const char* modSourceName(ModSource s) {
+    switch (s) {
+        case ModSource::LFO1:     return "LFO1";
+        case ModSource::LFO2:     return "LFO2";
+        case ModSource::ModEnv:   return "mod env";
+        case ModSource::KeyTrack: return "key trk";
+        case ModSource::Bend:     return "bend";
+        default:                  return "off";
+    }
+}
+inline const char* modDestName(ModDest d) {
+    switch (d) {
+        case ModDest::Pitch:     return "pitch";
+        case ModDest::Cutoff:    return "cutoff";
+        case ModDest::Resonance: return "reso";
+        case ModDest::Amp:       return "amp";
+        case ModDest::FenvDepth: return "f.env";
+        default:                 return "off";
+    }
+}
+inline const char* lfoShapeName(LfoShape s) {
+    switch (s) {
+        case LfoShape::Tri:    return "tri";
+        case LfoShape::Saw:    return "saw";
+        case LfoShape::Square: return "sqr";
+        case LfoShape::SH:     return "s&h";
+        default:               return "sine";
+    }
+}
+
+// One routing: source -> dest by a bipolar depth. C++11: it has default member
+// initializers so it's NOT aggregate-initializable on the device std — build it
+// with make() (mirrors NoteEvent::make()).
+struct ModSlot {
+    uint8_t src   = (uint8_t)ModSource::None;
+    uint8_t dest  = (uint8_t)ModDest::None;
+    float   depth = 0.f;  // -1..+1
+    static ModSlot make(ModSource s, ModDest d, float depth) {
+        ModSlot m;
+        m.src = (uint8_t)s;
+        m.dest = (uint8_t)d;
+        m.depth = depth;
+        return m;
+    }
+};
+constexpr int kModSlots = 6;
+
 // Everything the audio thread needs each block. POD and trivially copyable:
 // the UI writes the inactive copy of a double buffer and flips an atomic
 // index, so the render thread always sees a coherent set.
@@ -107,6 +167,15 @@ struct SynthParams {
     float reverbSize  = 0.6f;  // 0..1 tail length / room size
     uint8_t delaySync = 0;     // 0 = free (delayTimeS); 1.. = tempo division
                                // (locks the echo to tempoBpm — see delaySync*)
+
+    // ---- modulation: 2 LFOs + a 2nd (AD) envelope + the routing matrix -----
+    // All neutral by default (slots None) so the tone is unchanged until the
+    // player assigns a slot. LFO sync reuses the delaySync* tempo divisions
+    // (0 = free-run at the Hz rate; 1.. = lock to tempoBpm).
+    float   lfo1RateHz = 2.0f;   uint8_t lfo1Shape = 0;  uint8_t lfo1Sync = 0;
+    float   lfo2RateHz = 0.5f;   uint8_t lfo2Shape = 0;  uint8_t lfo2Sync = 0;
+    float   modEnvAtkS = 0.01f;  float   modEnvDecS = 0.30f;
+    ModSlot slots[kModSlots];
 
     // live modulation, pre-summed by the UI thread each frame (never persisted
     // as sound state, reset by the patch-save hygiene)

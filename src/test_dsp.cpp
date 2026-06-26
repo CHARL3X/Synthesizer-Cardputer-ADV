@@ -397,6 +397,74 @@ int main() {
         peakOf(s, 80);  // drain long releases before the next patch
     }
 
+    // ---- modulation matrix ------------------------------------------------
+    {
+        ModSlot ms = ModSlot::make(ModSource::LFO1, ModDest::Amp, 0.5f);
+        CHECK(ms.src == (uint8_t)ModSource::LFO1 && ms.dest == (uint8_t)ModDest::Amp &&
+                  fabsf(ms.depth - 0.5f) < 1e-6f,
+              "ModSlot::make round-trips its fields");
+
+        // windowed peak swing over a sustained note: steady => mn≈mx, tremolo => mx>>mn
+        auto windowSwing = [](Synth& syn, float& mn, float& mx) {
+            mn = 1e9f;
+            mx = 0.f;
+            float b[kBlock];
+            for (int w = 0; w < 50; ++w) {
+                float wp = 0.f;
+                for (int k = 0; k < 4; ++k) {  // 16 ms window
+                    syn.render(b, kBlock);
+                    for (int i = 0; i < kBlock; ++i) {
+                        const float a = fabsf(b[i]);
+                        if (a > wp) wp = a;
+                    }
+                }
+                if (wp < mn) mn = wp;
+                if (wp > mx) mx = wp;
+            }
+        };
+
+        SynthParams base;  // a steady sustained tone to watch the matrix act on
+        base.attackS = 0.005f;
+        base.decayS = 0.01f;
+        base.sustain = 1.f;
+        base.releaseS = 0.2f;
+        base.wave = Waveform::Saw;
+
+        // neutral (no routing) -> amplitude is steady
+        Synth sn;
+        sn.init(kSr);
+        sn.setParams(base);
+        sn.handleEvent(NoteEvent::make(NoteEvent::On, 5, 0xFF, false, 69.f));
+        peakOf(sn, 20);  // settle into sustain
+        float mn0, mx0;
+        windowSwing(sn, mn0, mx0);
+        CHECK(mx0 > 1e-4f && mx0 < mn0 * 1.5f, "neutral sustain is steady (matrix inert)");
+
+        // deep LFO1 -> Amp -> obvious tremolo
+        Synth sm;
+        sm.init(kSr);
+        SynthParams mod = base;
+        mod.lfo1RateHz = 8.f;
+        mod.lfo1Shape = (uint8_t)LfoShape::Sine;
+        mod.slots[0] = ModSlot::make(ModSource::LFO1, ModDest::Amp, 0.9f);
+        sm.setParams(mod);
+        sm.handleEvent(NoteEvent::make(NoteEvent::On, 5, 0xFF, false, 69.f));
+        peakOf(sm, 20);
+        float mn1, mx1;
+        windowSwing(sm, mn1, mx1);
+        CHECK(mx1 > mn1 * 3.f, "LFO1->Amp produces deep tremolo");
+
+        // ModEnv -> Cutoff stays audible and bounded after a fresh attack
+        SynthParams me = base;
+        me.modEnvAtkS = 0.01f;
+        me.modEnvDecS = 0.4f;
+        me.slots[0] = ModSlot::make(ModSource::ModEnv, ModDest::Cutoff, 0.8f);
+        sm.setParams(me);
+        sm.handleEvent(NoteEvent::make(NoteEvent::On, 6, 0xFF, false, 64.f));
+        const float pk = peakOf(sm, 60);
+        CHECK(pk > 0.005f && pk < 1.4f, "ModEnv->Cutoff renders audible & bounded");
+    }
+
     if (failures == 0) {
         printf("GLIDE dsp: all checks passed\n");
         return 0;
