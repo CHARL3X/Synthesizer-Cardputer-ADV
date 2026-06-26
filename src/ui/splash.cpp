@@ -6,6 +6,7 @@
 #include "../dsp/params.h"
 #include "../io/audio_engine.h"
 #include "../storage/glide_config.h"
+#include "glide_logo.h"
 #include "theme.h"
 
 namespace splash {
@@ -14,15 +15,15 @@ bool run() {
     auto& d = M5Cardputer.Display;
     d.fillScreen(theme::kBg);
 
-    d.setTextDatum(middle_center);
-    d.setFont(&fonts::FreeMonoBold18pt7b);
-    d.setTextColor(theme::kAmber, theme::kBg);
-    d.drawString("GLIDE", cfg::kScreenW / 2, 52);
-
-    d.setFont(&fonts::Font0);
-    d.setTextColor(theme::kDim, theme::kBg);
-    d.drawString("a pocket slide synth", cfg::kScreenW / 2, 80);
-    d.setTextDatum(top_left);
+    // The synthwave wordmark, centered, animated. Each frame is decoded into a
+    // reused sprite (drawPng) then blitted — one 230x115 sprite, not four, so
+    // the RAM cost is fixed regardless of frame count. White line-art on black
+    // composites straight onto the black splash — no color-keying needed.
+    const int lw = ui::kGlideLogoW, lh = ui::kGlideLogoH;
+    const int lx = (cfg::kScreenW - lw) / 2;
+    const int ly = (cfg::kScreenH - lh) / 2;
+    M5Canvas logo(&d);
+    const bool haveSpr = logo.createSprite(lw, lh);
 
     // boot chime: one note sliding up an octave — the soul, in one second
     const bool chime = store::get().bootSound;
@@ -35,19 +36,34 @@ bool run() {
         audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::On, kChimeId, 0xFF, false, 57.f));
     }
 
-    // phosphor sweep under the wordmark, paced with the chime's glide
-    const int y = 96, x0 = 40, x1 = cfg::kScreenW - 40;
-    for (int step = 0; step <= 24; ++step) {
-        const int x = x0 + (x1 - x0) * step / 24;
-        d.drawFastHLine(x0, y, x - x0, theme::kGreen);
-        if (chime && step == 6)
+    // ping-pong the frames: 0-1-2-3-2-1-0-1-2-3-2-1...  (the "1-2-3-4-3-2-1-..."
+    // bounce), so the grid/horizon sweeps in and back out without a hard jump.
+    static const uint8_t kSeq[] = {0, 1, 2, 3, 2, 1};
+    constexpr int kSeqLen = (int)(sizeof kSeq);
+    constexpr int kSteps = 24;          // ~3 bounce cycles
+    constexpr uint32_t kFrameMs = 80;
+    for (int step = 0; step < kSteps; ++step) {
+        int f = kSeq[step % kSeqLen];
+        if (f >= ui::kGlideFrameCount) f = ui::kGlideFrameCount - 1;  // fewer frames? clamp
+        const auto& fr = ui::kGlideFrames[f];
+        if (haveSpr) {
+            logo.drawPng(fr.data, fr.len, 0, 0);  // frames are opaque -> no clear needed
+            logo.pushSprite(lx, ly);
+        } else {
+            d.drawPng(fr.data, fr.len, lx, ly);   // no sprite RAM: decode to screen
+        }
+        // The chime is a short ~0.8s gesture — it does NOT run the length of
+        // the animation (which is much longer now). Glide up early, release
+        // well before the visual finishes so the boot tone stays a quick hello.
+        if (chime && step == 3)
             audio::pushEvent(
                 dsp::NoteEvent::make(dsp::NoteEvent::Retarget, kChimeId, 0xFF, false, 69.f));
+        if (chime && step == 10)
+            audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, kChimeId));
         M5Cardputer.update();
-        delay(34);
+        delay(kFrameMs);
     }
-    if (chime) audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, kChimeId));
-    delay(250);
+    delay(300);
     audio::setParams(store::get().synth);  // restore live params
 
     // Factory reset wipes settings AND saved sounds — it must be deliberate. A
