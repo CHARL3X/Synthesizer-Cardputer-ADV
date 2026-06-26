@@ -421,25 +421,28 @@ const Item kItems[] = {
     {"LFO2 sync", fLfo2Sync, aLfo2Sync},
     {"Mod env atk", fModEnvAtk, aModEnvAtk, true},
     {"Mod env dec", fModEnvDec, aModEnvDec, true},
-    {"MOD MATRIX (src>dest)", nullptr, nullptr},
-    {"Slot 1 source", fSlot0Src, aSlot0Src},
-    {"Slot 1 dest", fSlot0Dst, aSlot0Dst},
-    {"Slot 1 amount", fSlot0Amt, aSlot0Amt},
-    {"Slot 2 source", fSlot1Src, aSlot1Src},
-    {"Slot 2 dest", fSlot1Dst, aSlot1Dst},
-    {"Slot 2 amount", fSlot1Amt, aSlot1Amt},
-    {"Slot 3 source", fSlot2Src, aSlot2Src},
-    {"Slot 3 dest", fSlot2Dst, aSlot2Dst},
-    {"Slot 3 amount", fSlot2Amt, aSlot2Amt},
-    {"Slot 4 source", fSlot3Src, aSlot3Src},
-    {"Slot 4 dest", fSlot3Dst, aSlot3Dst},
-    {"Slot 4 amount", fSlot3Amt, aSlot3Amt},
-    {"Slot 5 source", fSlot4Src, aSlot4Src},
-    {"Slot 5 dest", fSlot4Dst, aSlot4Dst},
-    {"Slot 5 amount", fSlot4Amt, aSlot4Amt},
-    {"Slot 6 source", fSlot5Src, aSlot5Src},
-    {"Slot 6 dest", fSlot5Dst, aSlot5Dst},
-    {"Slot 6 amount", fSlot5Amt, aSlot5Amt},
+    {"MOD MATRIX", nullptr, nullptr},
+    // Each slot reads as a routing: "Mod N = <source>" then indented "to <dest>"
+    // and "amount". An unused slot (source off) collapses to its one line — set a
+    // source and its `to`/`amount` rows appear.
+    {"Mod 1", fSlot0Src, aSlot0Src},
+    {"   to", fSlot0Dst, aSlot0Dst},
+    {"   amount", fSlot0Amt, aSlot0Amt, true},
+    {"Mod 2", fSlot1Src, aSlot1Src},
+    {"   to", fSlot1Dst, aSlot1Dst},
+    {"   amount", fSlot1Amt, aSlot1Amt, true},
+    {"Mod 3", fSlot2Src, aSlot2Src},
+    {"   to", fSlot2Dst, aSlot2Dst},
+    {"   amount", fSlot2Amt, aSlot2Amt, true},
+    {"Mod 4", fSlot3Src, aSlot3Src},
+    {"   to", fSlot3Dst, aSlot3Dst},
+    {"   amount", fSlot3Amt, aSlot3Amt, true},
+    {"Mod 5", fSlot4Src, aSlot4Src},
+    {"   to", fSlot4Dst, aSlot4Dst},
+    {"   amount", fSlot4Amt, aSlot4Amt, true},
+    {"Mod 6", fSlot5Src, aSlot5Src},
+    {"   to", fSlot5Dst, aSlot5Dst},
+    {"   amount", fSlot5Amt, aSlot5Amt, true},
     {"TRIGGER (G0 button)", nullptr, nullptr},
     {"Trigger action", fTrigAct, aTrigAct},
     {"Trigger depth", fTrigDepth, aTrigDepth, true},
@@ -455,12 +458,35 @@ constexpr int kVisible = 8;
 
 inline bool isHeader(int i) { return kItems[i].format == nullptr; }
 
-// Next selectable row in `dir`, skipping headers, wrapping around the list.
+// An unused mod slot collapses to one line: its `to`/`amount` rows are hidden
+// until a source is chosen. Map a row's adjust fn back to its slot to decide.
+void (*const kSlotDstFn[dsp::kModSlots])(int) = {aSlot0Dst, aSlot1Dst, aSlot2Dst,
+                                                 aSlot3Dst, aSlot4Dst, aSlot5Dst};
+void (*const kSlotAmtFn[dsp::kModSlots])(int) = {aSlot0Amt, aSlot1Amt, aSlot2Amt,
+                                                 aSlot3Amt, aSlot4Amt, aSlot5Amt};
+int slotOfSub(void (*adj)(int)) {  // slot index if adj is a dest/amount thunk, else -1
+    for (int s = 0; s < dsp::kModSlots; ++s)
+        if (adj == kSlotDstFn[s] || adj == kSlotAmtFn[s]) return s;
+    return -1;
+}
+bool isHidden(int i) {
+    if (isHeader(i)) return false;  // headers always show
+    const int s = slotOfSub(kItems[i].adjust);
+    return s >= 0 && store::get().synth.slots[s].src == (uint8_t)dsp::ModSource::None;
+}
+int buildVisible(int* vis) {  // indices of currently-shown rows (headers + non-collapsed)
+    int nv = 0;
+    for (int i = 0; i < kItemCount; ++i)
+        if (!isHidden(i)) vis[nv++] = i;
+    return nv;
+}
+
+// Next selectable row in `dir`, skipping headers AND collapsed rows, wrapping.
 int step(int from, int dir) {
     int i = from;
     for (int n = 0; n < kItemCount; ++n) {
         i = (i + dir + kItemCount) % kItemCount;
-        if (!isHeader(i)) return i;
+        if (!isHeader(i) && !isHidden(i)) return i;
     }
     return from;
 }
@@ -507,10 +533,14 @@ void draw(M5Canvas& c, int sel, int top) {
         c.setTextDatum(top_left);
     }
 
+    int vis[kItemCount];
+    const int nv = buildVisible(vis);  // collapsed mod slots drop out of the list
+
     char val[28];
     for (int row = 0; row < kVisible; ++row) {
-        const int i = top + row;
-        if (i >= kItemCount) break;
+        const int vidx = top + row;
+        if (vidx >= nv) break;
+        const int i = vis[vidx];
         const int y = 18 + row * 13;
 
         if (isHeader(i)) {  // section label + a divider rule under it
@@ -533,16 +563,22 @@ void draw(M5Canvas& c, int sel, int top) {
         c.setTextDatum(top_left);
     }
 
-    // scroll position: 22 items behind an 8-row window deserve a map
-    const int trackY = 18, trackH = kVisible * 13 - 2;
-    c.drawFastVLine(cfg::kScreenW - 2, trackY, trackH, theme::kLine);
-    const int thumbH = trackH * kVisible / kItemCount;
-    const int thumbY = trackY + (trackH - thumbH) * sel / (kItemCount - 1);
-    c.fillRect(cfg::kScreenW - 3, thumbY, 2, thumbH, theme::kDim);
+    // scroll position map (over the currently-visible rows)
+    if (nv > kVisible) {
+        int vsel = 0;
+        for (int k = 0; k < nv; ++k)
+            if (vis[k] == sel) { vsel = k; break; }
+        const int trackY = 18, trackH = kVisible * 13 - 2;
+        c.drawFastVLine(cfg::kScreenW - 2, trackY, trackH, theme::kLine);
+        int thumbH = trackH * kVisible / nv;
+        if (thumbH < 4) thumbH = 4;
+        const int thumbY = trackY + (trackH - thumbH) * vsel / (nv - 1);
+        c.fillRect(cfg::kScreenW - 3, thumbY, 2, thumbH, theme::kDim);
+    }
 
     c.setFont(&fonts::Font0);
     c.setTextColor(theme::kDim, theme::kBg);
-    c.drawString(";. move  fn+;. section  ,/ change  ` back", 4, 125);
+    c.drawString(";. move  ,/ change (hold)  fn jump  ` back", 4, 125);
     c.pushSprite(0, 0);
 }
 
@@ -619,10 +655,17 @@ void run(M5Canvas& canvas) {
             audio::setParams(g.synth, g.backingLocked ? g.backingSynth : g.synth);
         }
 
-        if (sel < top) top = sel;
-        if (sel >= top + kVisible) top = sel - kVisible + 1;
-        if (sel > 0 && isHeader(sel - 1) && top > sel - 1)
-            top = sel - 1;  // keep the section header in view atop its first item
+        // scroll in visible-row space (collapsed mod slots aren't counted)
+        int vis[kItemCount];
+        const int nv = buildVisible(vis);
+        int vsel = 0;
+        for (int k = 0; k < nv; ++k)
+            if (vis[k] == sel) { vsel = k; break; }
+        if (vsel < top) top = vsel;
+        if (vsel >= top + kVisible) top = vsel - kVisible + 1;
+        if (vsel > 0 && isHeader(vis[vsel - 1]) && top > vsel - 1)
+            top = vsel - 1;  // keep the section header in view atop its first item
+        if (top < 0) top = 0;
 
         draw(canvas, sel, top);
         store::tick(now);
