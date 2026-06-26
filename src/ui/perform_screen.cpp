@@ -41,6 +41,8 @@ float gTrail[kTraceW];
 uint8_t gTrailBend[kTraceW];  // frames where the bend keys were deforming it
 uint8_t gTrailLev[kTraceW];   // lead envelope level per frame (0..255): drives the
                               // trace's brightness + glow, so loudness is visible
+uint8_t gTrailBri[kTraceW];   // lead filter openness per frame (0..255): green (dark)
+                              // -> gold (open), so timbre/filter motion is visible
 int gTrailPos = 0;
 bool gTrailInit = false;
 float gTrailCenter = 69.f;  // view center in MIDI, follows the lead slowly
@@ -258,6 +260,7 @@ void drawPitchTrail(M5Canvas& c) {
         for (int i = 0; i < kTraceW; ++i) gTrail[i] = NAN;
         memset(gTrailBend, 0, sizeof gTrailBend);
         memset(gTrailLev, 0, sizeof gTrailLev);
+        memset(gTrailBri, 0, sizeof gTrailBri);
         gTrailPos = 0;
         gTrailCenterSet = false;
         gTrailInit = true;
@@ -288,6 +291,7 @@ void drawPitchTrail(M5Canvas& c) {
     gTrail[gTrailPos] = v;
     gTrailBend[gTrailPos] = fabsf(keys::bendCentsNow()) > 2.f ? 1 : 0;
     gTrailLev[gTrailPos] = (uint8_t)(l.active ? clampf(l.level * 180.f, 0.f, 255.f) : 0.f);
+    gTrailBri[gTrailPos] = (uint8_t)(l.active ? clampf(l.brightness * 255.f, 0.f, 255.f) : 0.f);
     gTrailPos = (gTrailPos + 1) % kTraceW;
 
     // 30-semitone window: ~2.5 octaves visible
@@ -330,7 +334,13 @@ void drawPitchTrail(M5Canvas& c) {
             continue;
         }
         const int y = yOf(m);
-        const uint16_t baseCol = gTrailBend[idx] ? theme::kAmber : theme::kGreen;
+        // hue = timbre: a dark filter reads green, an open one warms toward gold
+        // (capped ~60% so it stays in the green-gold family). Bend overrides to
+        // full amber, since the deflection + colour together mark a pulled note.
+        const uint16_t baseCol = gTrailBend[idx]
+                                     ? theme::kAmber
+                                     : theme::blend(theme::kGreen, theme::kAmber,
+                                                    (uint8_t)((uint32_t)gTrailBri[idx] * 153 / 255));
         const uint8_t age = (uint8_t)(40 + (uint32_t)x * 215 / kTraceW);  // old->new
         const uint8_t lev = gTrailLev[idx];                              // loudness here
         // loudness shapes brightness on top of the age fade: a loud note glows,
@@ -358,10 +368,15 @@ void drawPitchTrail(M5Canvas& c) {
     // mid glow -> hot inner), so the live end glows before the trail fades behind it
     if (prevValid) {
         const int hx = kTraceX + kTraceW - 2;
+        // the white core warms toward amber as drive climbs — a gritty patch
+        // glows hot, a clean one stays cool white.
+        const float drv = cf.synth.drive;
+        const float warm = drv <= 2.f ? 0.f : (drv >= 7.f ? 1.f : (drv - 2.f) / 5.f);
+        const uint16_t core = theme::blend(theme::kIdle, theme::kAmber, (uint8_t)(warm * 150.f));
         c.drawFastVLine(hx, prevY - 5, 11, theme::scale(theme::kGreen, 22));
         c.drawFastVLine(hx, prevY - 3, 7, theme::scale(theme::kGreen, 70));
         c.drawFastVLine(hx, prevY - 1, 3, theme::kGreen);
-        c.fillRect(hx - 1, prevY - 1, 3, 3, theme::kIdle);
+        c.fillRect(hx - 1, prevY - 1, 3, 3, core);
     }
 }
 

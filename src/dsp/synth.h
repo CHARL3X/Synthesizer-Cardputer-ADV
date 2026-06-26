@@ -39,6 +39,9 @@ public:
     float leadLevel() const {
         return leadIdx_ >= 0 && voices_[leadIdx_].active() ? voices_[leadIdx_].level() : 0.f;
     }
+    // lead filter openness 0..1 (log cutoff incl. env + mod) — the live timbre,
+    // for the scope. Computed per block in render().
+    float leadBrightness() const { return leadBright_; }
     int heldVoices() const;
     int heldLeadVoices() const;  // held minus drones — what the cap governs
     int activeVoices() const;
@@ -76,6 +79,7 @@ private:
     float shHold1_ = 0.f, shHold2_ = 0.f;                   // held S&H values
     FEnv modEnvStage_ = FEnv::Idle;  // 2nd (mod) envelope — a routable AD source
     float modEnv_ = 0.f;
+    float leadBright_ = 0.5f;  // normalized lead cutoff (0..1) published to the scope
     uint32_t randRng_ = 0x2545F491u;  // per-note Random source: re-sampled on each
     float randHold_ = 0.f;            // fresh lead attack, held until the next
     float cutoffSm_ = 4000.f;

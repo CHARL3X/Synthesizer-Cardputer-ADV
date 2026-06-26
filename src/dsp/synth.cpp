@@ -351,6 +351,12 @@ void Synth::render(float* out, int n) {
     if (cutL < 60.f) cutL = 60.f;
     if (cutL > 14000.f) cutL = 14000.f;
     cutoffSm_ += (cutL - cutoffSm_) * 0.2f;
+    // publish normalized lead brightness (log cutoff 200..12000 Hz -> 0..1) for
+    // the scope's timbre colour — tracks the filter envelope and any cutoff mod.
+    {
+        const float b = (logf(cutoffSm_) - 5.298f) / 4.094f;  // ln(200)=5.298, ln(12000)-ln(200)=4.094
+        leadBright_ = b < 0.f ? 0.f : (b > 1.f ? 1.f : b);
+    }
     float resL = p_.resonance + modRes;  // matrix can push resonance
     if (resL < 0.f) resL = 0.f;
     if (resL > 0.95f) resL = 0.95f;
