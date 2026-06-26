@@ -424,28 +424,50 @@ void pushLiveSound() {  // apply the working sound to the engine + persist
 // Randomize just re-articulates the same id. The note is a lead voice, so it
 // auditions the live (just-randomized) lead sound, tails and all.
 constexpr uint8_t kPreviewId = 251;  // distinct from the boot chime's 250
-uint32_t gPreviewT0 = 0;             // note-on time (0 = idle sentinel)
-bool gPreviewGlided = false, gPreviewOff = false;
+
+// A short phrase, not a single beep: a low note, glides up then back down, a
+// couple of re-attacks across the range, then a sustained note left to ring on
+// its own tail. Long enough (~2.5s + release) to actually hear the attack
+// bloom, filter/LFO/mod-env movement, glide in BOTH directions, and the
+// reverb/delay tail — so a roll of Randomize is genuinely auditionable. A fixed
+// lick (same notes every roll) makes two random sounds easy to A/B.
+struct PrevStep { uint16_t atMs; uint8_t type; float pitch; };
+enum { kPrevOn = 0, kPrevReta = 1, kPrevOff = 2 };  // On = re-attack(+glide)
+const PrevStep kPhrase[] = {
+    {   0, kPrevOn,   52.f},  // low — hear the body
+    { 300, kPrevReta, 59.f},  // slide up
+    { 640, kPrevReta, 55.f},  // ...and back down: glide reads both ways
+    {1000, kPrevOn,   64.f},  // re-attack, mid
+    {1380, kPrevReta, 71.f},  // slide up high
+    {1860, kPrevOn,   60.f},  // re-attack, settle into a sustain
+    {2600, kPrevOff,   0.f},  // release — the patch's own tail rings on
+};
+constexpr int kPhraseLen = (int)(sizeof kPhrase / sizeof kPhrase[0]);
+
+uint32_t gPreviewT0 = 0;  // phrase start time (0 = idle sentinel)
+int gPreviewStep = 0;     // next step to fire
 
 void startPreview() {
     gPreviewT0 = millis();
     if (gPreviewT0 == 0) gPreviewT0 = 1;  // 0 means idle; never let now() land there
-    gPreviewGlided = gPreviewOff = false;
-    audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::On, kPreviewId, 0xFF, false, 60.f));
+    gPreviewStep = 0;  // a fresh roll re-articulates from the top
 }
 
 void tickPreview(uint32_t now) {
     if (!gPreviewT0) return;
     const uint32_t dt = now - gPreviewT0;
-    if (!gPreviewGlided && dt >= 170) {  // a short rise shows off glide + movement
-        audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Retarget, kPreviewId, 0xFF, false, 67.f));
-        gPreviewGlided = true;
+    // fire every step that has come due (catches up if a frame ran long)
+    while (gPreviewStep < kPhraseLen && dt >= kPhrase[gPreviewStep].atMs) {
+        const PrevStep& s = kPhrase[gPreviewStep];
+        if (s.type == kPrevOff) {
+            audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, kPreviewId));
+        } else {
+            const auto t = s.type == kPrevReta ? dsp::NoteEvent::Retarget : dsp::NoteEvent::On;
+            audio::pushEvent(dsp::NoteEvent::make(t, kPreviewId, 0xFF, false, s.pitch));
+        }
+        ++gPreviewStep;
     }
-    if (!gPreviewOff && dt >= 520) {  // let go; the patch's own release/FX tail rings on
-        audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::Off, kPreviewId));
-        gPreviewOff = true;
-        gPreviewT0 = 0;  // done — the tail is the engine's to finish
-    }
+    if (gPreviewStep >= kPhraseLen) gPreviewT0 = 0;  // done — the tail is the engine's to finish
 }
 
 void fInitSound(char* o, int c) { snprintf(o, c, "blank slate ,/"); }
@@ -480,15 +502,21 @@ void aRandomize(int) {
     if (rndf() < 0.5f) s.reverbMix = rndf() * 0.5f;
     if (rndf() < 0.4f) { s.delayMix = rndf() * 0.4f; s.delaySync = (uint8_t)rndi(1, 5); }
     if (rndf() < 0.4f) s.chorusDepth = rndf() * 0.6f;
-    const int nmod = rndi(0, 2);  // 0-2 mod routings for movement
-    for (int i = 0; i < nmod; ++i) {
+    // movement: give BOTH LFOs and the mod-env real settings up front, so
+    // whatever a routing slot lands on (LFO1/2, mod-env, key-track, S&H...)
+    // actually moves. Then route up to three slots — more of the engine in
+    // play per roll means richer, less samey results.
+    s.lfo1RateHz = 0.15f + rndf() * rndf() * 9.f;  // skew slow, with the odd fast one
+    s.lfo1Shape  = (uint8_t)rndi(0, (int)dsp::LfoShape::Count - 1);
+    s.lfo2RateHz = 0.1f + rndf() * rndf() * 6.f;
+    s.lfo2Shape  = (uint8_t)rndi(0, (int)dsp::LfoShape::Count - 1);
+    s.modEnvAtkS = rndf() * rndf() * 0.5f;
+    s.modEnvDecS = 0.08f + rndf() * 1.2f;
+    const int nmod = rndi(0, 3);  // 0-3 routings
+    for (int i = 0; i < nmod && i < dsp::kModSlots; ++i) {
         const dsp::ModSource src = (dsp::ModSource)rndi(1, (int)dsp::ModSource::Count - 1);
         const dsp::ModDest dst = (dsp::ModDest)rndi(1, (int)dsp::ModDest::Count - 1);
         s.slots[i] = dsp::ModSlot::make(src, dst, (rndf() * 2.f - 1.f) * 0.6f);
-    }
-    if (nmod > 0) {
-        s.lfo1RateHz = 0.2f + rndf() * 8.f;
-        s.lfo1Shape = (uint8_t)rndi(0, (int)dsp::LfoShape::Count - 1);
     }
     s.masterVol = vol;
     g.synth = s;
