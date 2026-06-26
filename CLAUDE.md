@@ -41,3 +41,18 @@ native env needs `~\.platformio\packages\toolchain-gccmingw32\bin` on PATH.
 - `` ` `` = exit, full-frame M5Canvas pushed once per frame (~30 fps), NVS
   keys ≤15 chars, Preferences namespace "glide", dist binary via
   support/copy_dist.py.
+
+## Adding a sound parameter (the expansion-safe way)
+
+Patches are a **tagged format** (`storage/patch_codec.{h,cpp}`), so adding a
+`SynthParams` field never wipes saved patches. To add one:
+1. Add the field to `dsp::SynthParams` with a **neutral default** (so the stock
+   tone is unchanged and `test_dsp.cpp` keeps passing).
+2. Give it a **new, never-reused tag** in `patch_codec.cpp`'s `Tag` enum + a row
+   in `buildTable` (append-only — never renumber a tag).
+3. Persist the live value as a flat NVS key in `glide_config.cpp`
+   `begin()`/`persistNow()` (absent key → the neutral default).
+4. Add a `format`/`adjust` pair + a `kItems[]` row in `settings_screen.cpp`.
+5. Consume it in `synth.cpp` (per-block is ~free; avoid per-sample).
+The modulation matrix (LFOs / mod-env / 6 routing slots) and the multimode
+filter were both added this way — copy them as the pattern.

@@ -267,6 +267,36 @@ taste and `fn`+`shift`+letter saves it with the slot, like every other sound
 parameter. The effects were the one thing you couldn't reach before; now
 nothing about the sound is off-limits.
 
+## The modulation matrix (get far from the default)
+
+Tilt was the first assignable modulator; now there's a whole rack of them, so
+two players with the same device can build sounds that share no DNA. Settings →
+*MOD SOURCES* and *MOD MATRIX*:
+
+- **Two LFOs**, each with a shape (sine / tri / saw / square / **S&H** random)
+  and either a free rate in Hz or a **tempo-sync** division that locks to the
+  *Jam tempo* (same `1/4`…`1/16` vocabulary as the delay) — so a wobble or a
+  filter sweep breathes in time with the progression.
+- **A second envelope** (attack / decay) that retriggers on each note.
+- **Six routing slots.** Each picks a *source* (LFO1, LFO2, mod-env, key-track,
+  bend), a *destination* (pitch, cutoff, resonance, amp, filter-env depth), and
+  a bipolar *amount*. Six slots × the sources and destinations is a combinatorial
+  sound-design space — vibrato, tremolo, auto-wah, growl, evolving pads, random
+  steppers — all from a handful of primitives, all on the lead voice (the
+  backing bed stays steady underneath). Everything defaults to **off**, so a
+  fresh patch is the original GLIDE tone until you wire a slot.
+
+**Filter modes** (settings → SOUND → *Filter mode*): the filter now does
+**lowpass** (the original voice), **highpass** (thin/airy), **bandpass**
+(vocal/telephone), and **notch** (hollow/phasey) — free, because the filter
+already computes them all.
+
+Every one of these saves with the slot (`fn`+`shift`+letter) and survives a
+reboot. And because patches are now stored in a **tagged format**, adding the
+next knob — or the one after that — will never again wipe the sounds you've
+already saved. Expansion is the point: the further you can get from the
+default, the more the instrument is *yours*.
+
 ## The philosophy, encoded
 
 - **The skill gap is the product.** Basic play takes minutes (scale lock +
