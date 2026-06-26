@@ -453,9 +453,13 @@ void startPreview() {
     gPreviewStep = 0;  // a fresh roll re-articulates from the top
 }
 
-void tickPreview(uint32_t now) {
+void tickPreview() {
     if (!gPreviewT0) return;
-    const uint32_t dt = now - gPreviewT0;
+    // Fresh clock, NOT the run loop's cached `now`: that value is captured at the
+    // top of the frame, before adjust()/startPreview() runs, so it predates
+    // gPreviewT0 by a few ms — dt would underflow and fire the whole phrase
+    // (including the final Off) in one silent frame.
+    const uint32_t dt = millis() - gPreviewT0;
     // fire every step that has come due (catches up if a frame ran long)
     while (gPreviewStep < kPhraseLen && dt >= kPhrase[gPreviewStep].atMs) {
         const PrevStep& s = kPhrase[gPreviewStep];
@@ -847,7 +851,7 @@ void run(M5Canvas& canvas) {
         store::tick(now);
         looper::tick(now);   // the loop plays through settings, like the drones
         keys::tickBacking(now);  // ...and so does the jam/chord progression
-        tickPreview(now);    // fire a Randomize audition's glide/release when due
+        tickPreview();       // fire a Randomize audition's glide/release when due
         delay(16);
     }
     // never leave an audition note ringing if the player exits mid-preview
