@@ -285,6 +285,86 @@ void aTrigDepth(int d) {
 void fTrigMode(char* o, int c) { snprintf(o, c, "%s", store::get().triggerLatch ? "latch (tap)" : "momentary"); }
 void aTrigMode(int) { store::get().triggerLatch = !store::get().triggerLatch; }
 
+// ---- modulation: LFOs, mod-env, and the routing matrix --------------------
+void fmtHz(char* o, int c, float hz) {
+    const int h = (int)(hz * 100 + 0.5f);
+    snprintf(o, c, "%d.%02d Hz", h / 100, h % 100);
+}
+void adjRate(float& hz, int d) {
+    const float step = hz < 2.f ? 0.1f : (hz < 8.f ? 0.5f : 1.f);  // fine low, coarse high
+    hz = clampT(hz + d * step, 0.05f, 30.f);
+}
+void fLfo1Rate(char* o, int c) { fmtHz(o, c, store::get().synth.lfo1RateHz); }
+void aLfo1Rate(int d) { adjRate(store::get().synth.lfo1RateHz, d); }
+void fLfo1Shape(char* o, int c) {
+    snprintf(o, c, "%s", dsp::lfoShapeName((dsp::LfoShape)store::get().synth.lfo1Shape));
+}
+void aLfo1Shape(int d) {
+    auto& s = store::get().synth;
+    s.lfo1Shape = (uint8_t)(((int)s.lfo1Shape + d + (int)dsp::LfoShape::Count) % (int)dsp::LfoShape::Count);
+}
+void fLfo1Sync(char* o, int c) { snprintf(o, c, "%s", dsp::delaySyncName(store::get().synth.lfo1Sync)); }
+void aLfo1Sync(int d) {
+    auto& s = store::get().synth;
+    s.lfo1Sync = (uint8_t)(((int)s.lfo1Sync + d + dsp::kDelaySyncCount) % dsp::kDelaySyncCount);
+}
+void fLfo2Rate(char* o, int c) { fmtHz(o, c, store::get().synth.lfo2RateHz); }
+void aLfo2Rate(int d) { adjRate(store::get().synth.lfo2RateHz, d); }
+void fLfo2Shape(char* o, int c) {
+    snprintf(o, c, "%s", dsp::lfoShapeName((dsp::LfoShape)store::get().synth.lfo2Shape));
+}
+void aLfo2Shape(int d) {
+    auto& s = store::get().synth;
+    s.lfo2Shape = (uint8_t)(((int)s.lfo2Shape + d + (int)dsp::LfoShape::Count) % (int)dsp::LfoShape::Count);
+}
+void fLfo2Sync(char* o, int c) { snprintf(o, c, "%s", dsp::delaySyncName(store::get().synth.lfo2Sync)); }
+void aLfo2Sync(int d) {
+    auto& s = store::get().synth;
+    s.lfo2Sync = (uint8_t)(((int)s.lfo2Sync + d + dsp::kDelaySyncCount) % dsp::kDelaySyncCount);
+}
+void fModEnvAtk(char* o, int c) { snprintf(o, c, "%d ms", (int)(store::get().synth.modEnvAtkS * 1000)); }
+void aModEnvAtk(int d) {
+    auto& s = store::get().synth;
+    s.modEnvAtkS = clampT(s.modEnvAtkS + d * 0.005f, 0.001f, 2.f);
+}
+void fModEnvDec(char* o, int c) { snprintf(o, c, "%d ms", (int)(store::get().synth.modEnvDecS * 1000)); }
+void aModEnvDec(int d) {
+    auto& s = store::get().synth;
+    s.modEnvDecS = clampT(s.modEnvDecS + d * 0.02f, 0.01f, 4.f);
+}
+
+// Per-slot src/dest/amount thunks (6 slots). A macro keeps the 18 functions
+// honest — each binds to one slot by index. (C++11: no template thunk table.)
+#define MOD_SLOT_THUNKS(N)                                                                 \
+    void fSlot##N##Src(char* o, int c) {                                                   \
+        snprintf(o, c, "%s", dsp::modSourceName((dsp::ModSource)store::get().synth.slots[N].src)); \
+    }                                                                                      \
+    void aSlot##N##Src(int d) {                                                            \
+        auto& s = store::get().synth.slots[N];                                             \
+        s.src = (uint8_t)(((int)s.src + d + (int)dsp::ModSource::Count) % (int)dsp::ModSource::Count); \
+    }                                                                                      \
+    void fSlot##N##Dst(char* o, int c) {                                                   \
+        snprintf(o, c, "%s", dsp::modDestName((dsp::ModDest)store::get().synth.slots[N].dest)); \
+    }                                                                                      \
+    void aSlot##N##Dst(int d) {                                                            \
+        auto& s = store::get().synth.slots[N];                                             \
+        s.dest = (uint8_t)(((int)s.dest + d + (int)dsp::ModDest::Count) % (int)dsp::ModDest::Count); \
+    }                                                                                      \
+    void fSlot##N##Amt(char* o, int c) {                                                   \
+        snprintf(o, c, "%+d %%", (int)(store::get().synth.slots[N].depth * 100));          \
+    }                                                                                      \
+    void aSlot##N##Amt(int d) {                                                            \
+        auto& s = store::get().synth.slots[N];                                             \
+        s.depth = clampT(s.depth + d * 0.05f, -1.f, 1.f);                                  \
+    }
+MOD_SLOT_THUNKS(0)
+MOD_SLOT_THUNKS(1)
+MOD_SLOT_THUNKS(2)
+MOD_SLOT_THUNKS(3)
+MOD_SLOT_THUNKS(4)
+MOD_SLOT_THUNKS(5)
+#undef MOD_SLOT_THUNKS
+
 const Item kItems[] = {
     // Sections (a null format = a non-selectable header the cursor skips).
     // fn+up/down jumps header-to-header so the deep list stays navigable.
@@ -321,6 +401,34 @@ const Item kItems[] = {
     {"Delay fb", fDelayFb, aDelayFb},
     {"Reverb send", fReverbSend, aReverbSend},
     {"Reverb size", fReverbSize, aReverbSize},
+    {"MOD SOURCES", nullptr, nullptr},
+    {"LFO1 rate", fLfo1Rate, aLfo1Rate},
+    {"LFO1 shape", fLfo1Shape, aLfo1Shape},
+    {"LFO1 sync", fLfo1Sync, aLfo1Sync},
+    {"LFO2 rate", fLfo2Rate, aLfo2Rate},
+    {"LFO2 shape", fLfo2Shape, aLfo2Shape},
+    {"LFO2 sync", fLfo2Sync, aLfo2Sync},
+    {"Mod env atk", fModEnvAtk, aModEnvAtk},
+    {"Mod env dec", fModEnvDec, aModEnvDec},
+    {"MOD MATRIX (src>dest)", nullptr, nullptr},
+    {"Slot 1 source", fSlot0Src, aSlot0Src},
+    {"Slot 1 dest", fSlot0Dst, aSlot0Dst},
+    {"Slot 1 amount", fSlot0Amt, aSlot0Amt},
+    {"Slot 2 source", fSlot1Src, aSlot1Src},
+    {"Slot 2 dest", fSlot1Dst, aSlot1Dst},
+    {"Slot 2 amount", fSlot1Amt, aSlot1Amt},
+    {"Slot 3 source", fSlot2Src, aSlot2Src},
+    {"Slot 3 dest", fSlot2Dst, aSlot2Dst},
+    {"Slot 3 amount", fSlot2Amt, aSlot2Amt},
+    {"Slot 4 source", fSlot3Src, aSlot3Src},
+    {"Slot 4 dest", fSlot3Dst, aSlot3Dst},
+    {"Slot 4 amount", fSlot3Amt, aSlot3Amt},
+    {"Slot 5 source", fSlot4Src, aSlot4Src},
+    {"Slot 5 dest", fSlot4Dst, aSlot4Dst},
+    {"Slot 5 amount", fSlot4Amt, aSlot4Amt},
+    {"Slot 6 source", fSlot5Src, aSlot5Src},
+    {"Slot 6 dest", fSlot5Dst, aSlot5Dst},
+    {"Slot 6 amount", fSlot5Amt, aSlot5Amt},
     {"TRIGGER (G0 button)", nullptr, nullptr},
     {"Trigger action", fTrigAct, aTrigAct},
     {"Trigger depth", fTrigDepth, aTrigDepth},
