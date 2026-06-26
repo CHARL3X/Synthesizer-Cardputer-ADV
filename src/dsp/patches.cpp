@@ -184,7 +184,8 @@ void buildBank(Patch* P) {
         s.sustain = 0.78f;
         s.releaseS = 1.2f;
         s.autoVibCents = 1.2f;           // a breath of life (was a touch much)
-        s.glideS = 0.28f;
+        s.glideS = 0.07f;                 // fluid between chords but quick enough to
+                                          // play fast runs (0.28 trapped notes mid-slide)
         s.glideMode = GlideMode::Always;  // fluid between chords — less "stepped"
         s.chorusDepth = 0.5f;            // ensemble width — pulled back, less wobble
         s.delayMix = 0.18f;
