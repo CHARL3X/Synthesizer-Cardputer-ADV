@@ -299,6 +299,16 @@ default, the more the instrument is *yours*.
 
 ## The philosophy, encoded
 
+- **One device, your sound.** Everyone who buys a Cardputer holds the same 56
+  keys and the same one-watt speaker — but the engine is deep enough that no two
+  players' instruments need sound alike. A modulation matrix (two LFOs, a second
+  envelope, tilt and per-note random as sources, routable to pitch, filter, amp,
+  drive and the FX), a multimode filter, and a full send-FX rack — all saveable,
+  and thanks to the tagged patch format, **never wiped by a future update.** The
+  defaults get you playing in minutes; the depth is there so the sound becomes
+  unmistakably *yours*. Owning one shouldn't mean sounding like everyone else who
+  owns one — the instrument is a starting point, not a preset. Every knob added
+  widens the distance one player can put between their sound and the next.
 - **The skill gap is the product.** Basic play takes minutes (scale lock +
   degree mapping = first session sounds good). Mastery — clean legato
   overlaps, accurate shape re-fingering, controlled bends into chromatic
