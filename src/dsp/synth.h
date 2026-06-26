@@ -49,7 +49,11 @@ private:
     // paraphonic filter envelope: retriggered by fresh attacks only —
     // legato hand-offs and slides never re-snap the filter
     enum class FEnv : uint8_t { Idle, Attack, Decay };
+    void advanceAD(FEnv& stage, float& env, float atkS, float decS, float blockDur);
     void advanceFenv(FEnv& stage, float& env, const SynthParams& p, float blockDur);
+    // one mod source: an LFO with selectable shape and optional tempo-sync.
+    float evalLfo(float& phase, float rateHz, uint8_t shape, uint8_t sync,
+                  uint32_t& rng, float& hold, int n);
 
     Voice voices_[kMaxVoices];
     SynthParams p_;      // lead (the live, solo sound — carries the tilt mods)
@@ -61,7 +65,13 @@ private:
     Fx fx_;              // one shared "room" (reverb/delay/chorus), lead-driven
     float backBuf_[kBlockMax] = {0.f};  // backing sub-mix before it joins the lead
     float sr_ = 32000.f;
-    float lfoPhase_ = 0.f;
+    float lfoPhase_ = 0.f;       // the dedicated 5.5 Hz auto-vibrato LFO
+    float lfo1Phase_ = 0.f;      // mod-matrix LFO1
+    float lfo2Phase_ = 0.f;      // mod-matrix LFO2
+    uint32_t shRng1_ = 0x12345678u, shRng2_ = 0x9E3779B9u;  // per-LFO S&H noise
+    float shHold1_ = 0.f, shHold2_ = 0.f;                   // held S&H values
+    FEnv modEnvStage_ = FEnv::Idle;  // 2nd (mod) envelope — a routable AD source
+    float modEnv_ = 0.f;
     float cutoffSm_ = 4000.f;
     float cutoffSmBack_ = 4000.f;
     float volSm_ = 0.f;
