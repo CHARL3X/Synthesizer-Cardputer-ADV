@@ -56,12 +56,18 @@ inline bool chromaticInScale(const Layout& l, int string, int col) {
 }
 
 // A diatonic chord rooted at a grid position — the backing for the auto
-// progression. With scale lock it stacks scale-thirds (degrees d, d+2, d+4):
-// real major/minor/dim color that is ALWAYS in key, the same "you can't hit a
-// wrong note" guarantee the melody gets. Chromatic (lock off) falls back to a
-// power voicing (root, fifth, octave). Voiced one octave under the grid pitch,
-// like the drones — a low pad to solo over. Writes up to maxOut fractional
-// MIDI notes (root first) and returns the count.
+// progression. With scale lock it stacks thirds into a real major/minor/dim
+// triad that is ALWAYS in key, the same "you can't hit a wrong note" guarantee
+// the melody gets — but the triad is built from the scale's HARMONY PARENT, not
+// its own degrees. For 7-note scales the parent is the scale itself, so diatonic
+// progressions are unchanged. For pentatonic/blues the parent is the diatonic
+// scale they're carved from, so the backing stays consonant minor/major triads
+// while the solo keeps the literal scale: the blues ♭5 "blue note" stays a
+// melodic color over the chords and never lands as a chord tone (it snaps onto
+// the nearest harmony tone if you tap it as a step). Chromatic (lock off) falls
+// back to a power voicing (root, fifth, octave). Voiced one octave under the
+// grid pitch, like the drones — a low pad to solo over. Writes up to maxOut
+// fractional MIDI notes (root first) and returns the count.
 inline int chordPitches(const Layout& l, int string, int col, bool chromatic,
                         float* out, int maxOut) {
     if (maxOut <= 0) return 0;
@@ -69,11 +75,21 @@ inline int chordPitches(const Layout& l, int string, int col, bool chromatic,
     int n = 0;
     if (l.scaleLock && !chromatic) {
         const Scale& sc = kScales[l.scaleIdx];
+        const Scale& hsc = kScales[sc.harm];      // 7-note triad source
         const int deg0 = string * rowDegrees(l) + col;
-        const int thirds[3] = {0, 2, 4};  // stacked scale-thirds
+        const float octBase = base + 12.f * (deg0 / sc.len);  // tonic at this octave
+        const int pc = sc.steps[deg0 % sc.len];   // tapped tone, semitones over tonic
+        // Snap that tapped pitch class onto the nearest harmony-scale degree, so
+        // non-parent tones (the blue note) become a consonant chord root.
+        int hd = 0, bestDiff = 99;
+        for (int i = 0; i < hsc.len; ++i) {
+            const int diff = pc > hsc.steps[i] ? pc - hsc.steps[i] : hsc.steps[i] - pc;
+            if (diff < bestDiff) { bestDiff = diff; hd = i; }
+        }
+        const int thirds[3] = {0, 2, 4};  // stacked diatonic thirds = a triad
         for (int k = 0; k < 3 && n < maxOut; ++k) {
-            const int deg = deg0 + thirds[k];
-            out[n++] = base + 12.f * (deg / sc.len) + sc.steps[deg % sc.len];
+            const int deg = hd + thirds[k];
+            out[n++] = octBase + 12.f * (deg / hsc.len) + hsc.steps[deg % hsc.len];
         }
     } else {
         const float root = base + string * l.rowIntervalSemis + col;
