@@ -344,23 +344,14 @@ void drawPitchTrail(M5Canvas& c) {
     }
 }
 
-// CRT depth: a slow phosphor "refresh" sheen drifting down the scope, plus
-// bevelled glass corners. Pure atmosphere — kept faint so it never fights the
-// trace. Overlaid on top of the scope, skipped during the quick-edit panel.
-void drawCrt(M5Canvas& c, uint32_t now) {
+// CRT depth: bevelled glass corners so the scope seats in its bezel like a
+// little tube screen. (The drifting scanline sheen was removed — too busy.)
+// Overlaid on top of the scope, skipped during the quick-edit panel.
+void drawCrt(M5Canvas& c) {
     const int x0 = kTraceX, x1 = kTraceX + kTraceW - 1;
     const int y0 = kScopeY, y1 = kScopeY + kScopeH - 1;
 
-    // drifting refresh sheen: a faint bright band, one slow pass every ~3.7 s
-    const int sy = y0 + (int)((now / 45) % (uint32_t)kScopeH);
-    const uint16_t sheen = theme::scale(theme::kGreen, 26);
-    const uint16_t sheenDim = theme::scale(theme::kGreen, 12);
-    if (sy - 1 >= y0) c.drawFastHLine(x0, sy - 1, kTraceW, sheenDim);
-    c.drawFastHLine(x0, sy, kTraceW, sheen);
-    if (sy + 1 <= y1) c.drawFastHLine(x0, sy + 1, kTraceW, sheenDim);
-
-    // bevelled glass corners — a 45° chamfer masked back to black, so the scope
-    // seats in its bezel like a little tube screen
+    // bevelled glass corners — a 45° chamfer masked back to black
     const int r = 7;
     for (int i = 0; i < r; ++i) {
         const int w = r - i;
@@ -740,7 +731,7 @@ void run() {
         canvas.fillScreen(theme::kBg);
         drawStatus(canvas);
         drawScope(canvas, frameStart);
-        if (!keys::quickEditActive()) drawCrt(canvas, frameStart);  // CRT atmosphere over the trace
+        if (!keys::quickEditActive()) drawCrt(canvas);  // CRT bezel over the trace
         drawReadout(canvas);
         drawLoop(canvas, frameStart);
         drawProg(canvas, frameStart);

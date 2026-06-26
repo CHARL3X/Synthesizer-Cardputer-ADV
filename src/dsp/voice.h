@@ -52,7 +52,7 @@ private:
     float sr_ = 32000.f;
     Env env_ = Env::Idle;
     float lvl_ = 0.f;
-    float relRate_ = 0.f;
+    float relCoef_ = 0.f;   // per-sample multiplier for the exponential release
     uint8_t id_ = 0;
     uint8_t lane_ = 0xFF;
     uint32_t seq_ = 0;

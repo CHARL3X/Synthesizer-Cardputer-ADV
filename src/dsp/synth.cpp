@@ -214,8 +214,8 @@ void Synth::advanceFenv(FEnv& stage, float& env, const SynthParams& p, float blo
         }
     } else if (stage == FEnv::Decay) {
         const float dS = p.fenvDecS < 0.01f ? 0.01f : p.fenvDecS;
-        env -= blockDur / dS;
-        if (env <= 0.f) {
+        env *= expf(-4.6f * blockDur / dS);  // exponential fall: a natural filter
+        if (env <= 0.002f) {                 // sweep closing, not a linear ramp
             env = 0.f;
             stage = FEnv::Idle;
         }

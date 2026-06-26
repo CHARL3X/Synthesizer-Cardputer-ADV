@@ -13,6 +13,15 @@ constexpr float kPulseGain = 0.7f;  // saw-difference pulse peaks ~1.8 at thin w
 constexpr float kMinAttackS = 0.001f;
 constexpr float kMinSegS = 0.002f;
 constexpr float kTwoPi = 6.28318530718f;
+// Envelopes are analog-style (RC charge/discharge), not linear ramps — the
+// single biggest "real synth vs cheap keyboard" difference. The attack chases a
+// target ABOVE 1 and clamps at 1, giving the front-loaded capacitor-charge
+// curve; decay/release are true exponential falls. kEnvReach ≈ ln(100): a
+// segment lands within ~1% of its destination in its set time.
+constexpr float kAttackTarget = 1.3f;
+constexpr float kEnvReach = 4.6f;
+// attack reaches 1.0 (not the 1.3 target) in attackS -> this shorter constant
+constexpr float kAtkReach = 1.465f;
 constexpr float kPwmRateHz = 0.6f;  // slow width sweep — the classic PWM shimmer
 
 inline uint32_t freqToInc(float freq, float sr) {
@@ -53,15 +62,15 @@ void Voice::retrigger() {
 
 void Voice::noteOff(float releaseS) {
     if (env_ == Env::Idle) return;
-    if (lvl_ < 1e-3f) {  // released during the first ms of attack: inaudible —
-        lvl_ = 0.f;      // free the slot now instead of squatting for releaseS
+    if (lvl_ < 0.01f) {  // released while still inaudible (<1%, e.g. early in a
+        lvl_ = 0.f;      // long attack): just free the slot, no pointless tail
         env_ = Env::Idle;
         return;
     }
     if (releaseS < kMinSegS) releaseS = kMinSegS;
-    // constant-rate release: full scale takes releaseS, quieter notes finish
-    // proportionally sooner — so staccato tails never exhaust the voice pool
-    relRate_ = 1.f / (releaseS * sr_);
+    // exponential release: lvl reaches ~-60 dB in releaseS from full scale, so
+    // quieter notes finish proportionally sooner — the pool never starves
+    relCoef_ = expf(-kEnvReach * 1.5f / (releaseS * sr_));
     env_ = Env::Release;
 }
 
@@ -113,11 +122,11 @@ void Voice::render(float* out, int n, const SynthParams& p, float centsOffset) {
         mDn = 1.f / mUp;
     }
 
-    // ---- envelope rates (live: param edits apply mid-note) --------------
+    // ---- envelope coefficients (analog RC curves; live edits apply) -----
     const float aS = p.attackS < kMinAttackS ? kMinAttackS : p.attackS;
     const float dS = p.decayS < kMinSegS ? kMinSegS : p.decayS;
-    const float aInc = 1.f / (aS * sr_);
-    const float dInc = (1.f - p.sustain) / (dS * sr_);
+    const float ka = 1.f - expf(-kAtkReach / (aS * sr_));   // charge toward target
+    const float kd = 1.f - expf(-kEnvReach / (dS * sr_));    // fall toward sustain
 
     float inc = inc0;
     const float gain = fat ? kVoiceGain * kFatGain : kVoiceGain;
@@ -130,23 +139,23 @@ void Voice::render(float* out, int n, const SynthParams& p, float centsOffset) {
         // envelope
         switch (env_) {
             case Env::Attack:
-                lvl_ += aInc;
+                lvl_ += (kAttackTarget - lvl_) * ka;  // front-loaded RC charge
                 if (lvl_ >= 1.f) {
                     lvl_ = 1.f;
                     env_ = Env::Decay;
                 }
                 break;
             case Env::Decay:
-                lvl_ -= dInc;
-                if (lvl_ <= p.sustain) env_ = Env::Sustain;  // no snap: slew below
+                lvl_ += (p.sustain - lvl_) * kd;       // exponential fall to sustain
+                if (lvl_ - p.sustain <= 0.002f) env_ = Env::Sustain;
                 break;
             case Env::Sustain:
                 // slew toward the live sustain value so mid-note edits don't click
                 lvl_ += (p.sustain - lvl_) * 0.0008f;
                 break;
             case Env::Release:
-                lvl_ -= relRate_;
-                if (lvl_ <= 0.f) {
+                lvl_ *= relCoef_;                      // exponential discharge
+                if (lvl_ <= 1e-3f) {
                     lvl_ = 0.f;
                     env_ = Env::Idle;
                     return;  // rest of block is silence
