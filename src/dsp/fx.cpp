@@ -23,6 +23,9 @@ constexpr int kCombLen[4] = {810, 926, 1032, 1130};
 constexpr int kApLen[2]   = {403, 320};
 constexpr float kRvbDamp  = 0.25f;   // HF absorption in the comb feedback
 constexpr float kRvbInput = 0.22f;   // drive into the comb bank (4 combs sum)
+constexpr float kRvbHpCoef = 0.03f;  // ~150 Hz one-pole high-pass on the SEND:
+                                     // keep low end out of the tail so the
+                                     // reverb stays clean instead of booming
 
 inline float readLerp(const float* buf, int len, int writePos, float delaySamp) {
     // fractional read `delaySamp` samples behind the write head (linear interp)
@@ -63,6 +66,7 @@ void Fx::reset() {
         combIdx_[i] = 0;
         combLp_[i] = 0.f;
     }
+    rvHpLp_ = 0.f;
     for (int i = 0; i < kNAllpass; ++i) apIdx_[i] = 0;
 }
 
@@ -148,7 +152,9 @@ void Fx::process(float* buf, int n, const SynthParams& p) {
 
         // reverb -----------------------------------------------------------
         if (doReverb && rvReady_) {
-            const float in = wet * kRvbInput;
+            // high-pass the send (track lows, feed only the rest into the tail)
+            rvHpLp_ += (wet - rvHpLp_) * kRvbHpCoef;
+            const float in = (wet - rvHpLp_) * kRvbInput;
             float acc = 0.f;
             for (int c = 0; c < kNComb; ++c) {
                 const int ci = combIdx_[c];

@@ -87,15 +87,15 @@ A `*` in the status bar means you've saved your own version over the slot
 | key | sound | character | tilt does |
 |-----|-------|-----------|-----------|
 | q | **GLIDE** | the signature dry saw — *literally the boot sound / engine default* | vibrato (roll: filter) |
-| w | **WHISTLE** | the digital slide whistle itself — sine, always gliding | vibrato |
-| e | **PLUCK** | filter-envelope pluck, slides on overlap | filter |
-| r | **BASS** | square + heavy sub-octave, dark | filter |
+| w | **EPIANO** | mellow electric piano — triangle, soft tine ping, chorus + plate | filter (roll: wobble) |
+| e | **HARP** | bright plucked string, cascading dotted-8 delay into a hall | filter (roll: dynamics) |
+| r | **BASS** | saw + heavy sub, driven, snappy filter pluck — for sliding basslines | filter (roll: dynamics) |
 | t | **ACID** | resonant squelch — *lean into it, tilt is the wah* | filter (full) |
-| y | **PAD** | fat detuned wash, slow bloom | filter (gentle) |
-| u | **LEAD** | driven, singing vibrato | vibrato |
-| i | **ORGAN** | square + sub, instant — *tilt is the swell pedal* | volume |
-| o | **STRINGS** | PWM ensemble wash, slow bloom, always gliding — lush as a drone bed | volume (swell) |
-| p | **CELLO** | bowed: driven saw + sub, bow-rosin noise, made for bends | vibrato (roll: bow pressure) |
+| y | **PAD** | crisp animated PWM wash, always-gliding — solo a progression over it | filter (roll: swell) |
+| u | **LEAD** | driven, singing, always-gliding — dotted-8 in the pocket | vibrato (roll: filter) |
+| i | **ORGAN** | soulful tonewheel: drawbar body, percussion ping, Leslie + growl | volume swell (roll: Leslie) |
+| o | **BRASS** | bold synth-brass section, swells up into the blat | filter (roll: shake) |
+| p | **GLASS** | crystalline struck bell, long shimmering delay + hall | vibrato (roll: ring) |
 
 Under the hood these ride five engine additions: a paraphonic **filter
 envelope** (retriggered by fresh attacks, never by legato hand-offs — your
@@ -111,8 +111,8 @@ with `enter`, **never pitch bend** (nobody wants to lean the instrument
 over again). What's new:
 
 - **Per-sound personality**: every patch ships with its own route and depth
-  — ACID tilts into a full wah, ORGAN tilts into a swell pedal, WHISTLE and
-  LEAD tilt into vibrato. Saving a slot saves its tilt setup too.
+  — ACID tilts into a full wah, ORGAN tilts into a swell pedal, LEAD and GLASS
+  tilt into vibrato. Saving a slot saves its tilt setup too.
 - **Depth** (settings): how hard the motion drives the effect, 0–100%.
 - **Center calibration** (settings → *Tilt center*): "flat" becomes
   wherever *you* naturally hold the thing, not wherever gravity says.
@@ -168,7 +168,7 @@ replayed through the live engine:
 - The hint line at the bottom turns loop-aware while a take exists
   (`alt dub  hold undo  fn+alt clear`), so the gestures are always on screen.
 - Because the loop is events, it costs kilobytes — and, the good part, it
-  **plays through whatever sound is selected**. Record a CELLO bassline,
+  **plays through whatever sound is selected**. Record a BASS line,
   switch to LEAD, solo over it; swap sounds mid-jam and the whole
   arrangement re-voices itself. Recorded slides, hammer-ons and octave
   sweeps replay as slides, hammer-ons and sweeps.
@@ -219,7 +219,7 @@ progression* (needs *Jam rows* on):
 - **bksp (panic)** clears the progression to start over — same gesture that
   clears the drones. Like them, it's performance state and never hits flash.
 
-Pick PAD, STRINGS, or ORGAN for the bed, set a slow tempo, tap four chords,
+Pick PAD, BRASS, or ORGAN for the bed, set a slow tempo, tap four chords,
 and you've got a song to solo on in about ten seconds.
 
 ## Soloing over the jam: a separate register and sound

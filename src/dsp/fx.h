@@ -55,6 +55,8 @@ private:
     int    combIdx_[kNComb] = {0};
     int    apIdx_[kNAllpass] = {0};
     float  combLp_[kNComb] = {0.f};            // per-comb damping state
+    float  rvHpLp_ = 0.f;                      // one-pole LP state -> high-pass
+                                               // the reverb SEND (no boomy tail)
 
     float sr_ = 32000.f;
     bool  rvReady_ = false;
