@@ -121,6 +121,8 @@ void Synth::noteOn(const NoteEvent& ev) {
         ((ev.drone || ev.backing) ? fenvBackStage_ : fenvStage_) = FEnv::Attack;
         if (!ev.drone && !ev.backing) {
             modEnvStage_ = FEnv::Attack;  // 2nd env retriggers on fresh lead attacks
+            randRng_ = randRng_ * 1664525u + 1013904223u;  // per-note Random source
+            randHold_ = (float)(int32_t)randRng_ * (1.f / 2147483648.f);
             leadIdx_ = (int8_t)(v - voices_);
         }
         return;
@@ -170,6 +172,8 @@ void Synth::noteOn(const NoteEvent& ev) {
     ((ev.drone || ev.backing) ? fenvBackStage_ : fenvStage_) = FEnv::Attack;  // its layer's filter
     if (!ev.drone && !ev.backing) {
         modEnvStage_ = FEnv::Attack;  // 2nd env retriggers on fresh lead attacks
+        randRng_ = randRng_ * 1664525u + 1013904223u;  // per-note Random source
+        randHold_ = (float)(int32_t)randRng_ * (1.f / 2147483648.f);
         leadIdx_ = (int8_t)(v - voices_);  // readout = the solo hand
     }
 }
@@ -298,12 +302,20 @@ void Synth::render(float* out, int n) {
     src[(int)ModSource::ModEnv]   = modEnv_;  // unipolar 0..1
     src[(int)ModSource::KeyTrack] = keyTrk;
     src[(int)ModSource::Bend]     = p_.bendCents * (1.f / 1200.f);
+    src[(int)ModSource::TiltA]    = p_.tiltAVal;
+    src[(int)ModSource::TiltB]    = p_.tiltBVal;
+    src[(int)ModSource::Random]   = randHold_;
 
     float modPitchCents = 0.f, modCutOct = 0.f, modRes = 0.f, modFenvOct = 0.f, modAmpMul = 1.f;
+    float modDrive = 0.f, modChorus = 0.f, modDelay = 0.f, modReverb = 0.f;
     for (int i = 0; i < kModSlots; ++i) {
         const ModSlot& m = p_.slots[i];
         if (m.src == 0 || m.dest == 0 || m.depth == 0.f) continue;  // None / inert
         if (m.src >= (uint8_t)ModSource::Count || m.dest >= (uint8_t)ModDest::Count) continue;
+        // tilt is NEVER pitch bend (rejected on tape) — refuse that one routing.
+        if ((ModDest)m.dest == ModDest::Pitch &&
+            ((ModSource)m.src == ModSource::TiltA || (ModSource)m.src == ModSource::TiltB))
+            continue;
         const float v = src[m.src] * m.depth;
         switch ((ModDest)m.dest) {
             case ModDest::Pitch:     modPitchCents += v * 1200.f; break;  // ±1 oct at depth 1
@@ -311,6 +323,10 @@ void Synth::render(float* out, int n) {
             case ModDest::Resonance: modRes        += v;          break;
             case ModDest::Amp:       modAmpMul     *= (1.f + v);  break;  // tremolo
             case ModDest::FenvDepth: modFenvOct    += v * 4.f;    break;
+            case ModDest::Drive:     modDrive      += v * 4.f;    break;  // grit pulse
+            case ModDest::Chorus:    modChorus     += v;          break;
+            case ModDest::Delay:     modDelay      += v;          break;
+            case ModDest::Reverb:    modReverb     += v;          break;
             default: break;
         }
     }
@@ -361,7 +377,8 @@ void Synth::render(float* out, int n) {
     float volL = rampVol(p_.masterVol * p_.volMod * modAmpMul, volSm_, dvL);
     float volB = rampVol(pBack_.masterVol * pBack_.volMod, volSmBack_, dvB);
 
-    const float driveL = p_.drive < 1.f ? 1.f : (p_.drive > 8.f ? 8.f : p_.drive);
+    const float driveLm = p_.drive + modDrive;  // matrix can pulse the grit
+    const float driveL = driveLm < 1.f ? 1.f : (driveLm > 8.f ? 8.f : driveLm);
     const float driveB = pBack_.drive < 1.f ? 1.f : (pBack_.drive > 8.f ? 8.f : pBack_.drive);
     const float makeupL = 1.f / (0.55f + 0.45f * driveL);
     const float makeupB = 1.f / (0.55f + 0.45f * driveB);
@@ -375,8 +392,19 @@ void Synth::render(float* out, int n) {
     }
 
     // one shared FX "room": both layers wash into the live patch's
-    // chorus/delay/reverb. Self-bypasses when all three sends are 0.
-    fx_.process(out, n, p_);
+    // chorus/delay/reverb. Self-bypasses when all three sends are 0. If the
+    // matrix is modulating a send, feed a local copy with the modulated levels
+    // (cheap: a per-block struct copy only when a send slot is actually active).
+    if (modChorus != 0.f || modDelay != 0.f || modReverb != 0.f) {
+        auto clamp01 = [](float x) { return x < 0.f ? 0.f : (x > 1.f ? 1.f : x); };
+        SynthParams fxp = p_;
+        fxp.chorusDepth = clamp01(p_.chorusDepth + modChorus);
+        fxp.delayMix = clamp01(p_.delayMix + modDelay);
+        fxp.reverbMix = clamp01(p_.reverbMix + modReverb);
+        fx_.process(out, n, fxp);
+    } else {
+        fx_.process(out, n, p_);
+    }
 
     // once-per-block NaN/denormal guard: a poisoned filter or a runaway
     // reverb tail would otherwise stay broken forever — reset loudly visible

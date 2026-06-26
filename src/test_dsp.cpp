@@ -463,6 +463,21 @@ int main() {
         sm.handleEvent(NoteEvent::make(NoteEvent::On, 6, 0xFF, false, 64.f));
         const float pk = peakOf(sm, 60);
         CHECK(pk > 0.005f && pk < 1.4f, "ModEnv->Cutoff renders audible & bounded");
+
+        // new sources/dests render finite & bounded: tilt->drive, random->reverb,
+        // LFO->delay, and the tilt->pitch guard (must not crash / blow up).
+        SynthParams nx = base;
+        nx.tiltAVal = 0.8f;  // pretend the device is leaned over
+        nx.slots[0] = ModSlot::make(ModSource::TiltA, ModDest::Drive, 0.7f);
+        nx.slots[1] = ModSlot::make(ModSource::Random, ModDest::Reverb, 0.5f);
+        nx.slots[2] = ModSlot::make(ModSource::LFO1, ModDest::Delay, 0.4f);
+        nx.slots[3] = ModSlot::make(ModSource::TiltA, ModDest::Pitch, 1.0f);  // refused (no-op)
+        sm.setParams(nx);
+        sm.handleEvent(NoteEvent::make(NoteEvent::On, 7, 0xFF, false, 69.f));
+        const float pk2 = peakOf(sm, 40);
+        CHECK(pk2 > 0.005f && pk2 < 1.6f, "new sources/dests render bounded");
+        sm.handleEvent(NoteEvent::make(NoteEvent::AllOff, 0, 0xFF, false, 0.f));
+        peakOf(sm, 80);
     }
 
     // ---- filter modes (LP/HP/BP/notch) render finite & bounded ------------

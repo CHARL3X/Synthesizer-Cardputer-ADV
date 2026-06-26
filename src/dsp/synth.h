@@ -72,6 +72,8 @@ private:
     float shHold1_ = 0.f, shHold2_ = 0.f;                   // held S&H values
     FEnv modEnvStage_ = FEnv::Idle;  // 2nd (mod) envelope — a routable AD source
     float modEnv_ = 0.f;
+    uint32_t randRng_ = 0x2545F491u;  // per-note Random source: re-sampled on each
+    float randHold_ = 0.f;            // fresh lead attack, held until the next
     float cutoffSm_ = 4000.f;
     float cutoffSmBack_ = 4000.f;
     float volSm_ = 0.f;

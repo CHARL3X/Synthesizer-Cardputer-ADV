@@ -71,6 +71,7 @@ void applyTilt() {
     auto& c = store::get();
     auto& s = c.synth;
     float cutOct = 0.f, vibCents = 0.f, volMul = 1.f;
+    float rawA = 0.f, rawB = 0.f;  // raw axes, exposed as mod-matrix sources
 
     // Guard on enabled+available only — axis A may be Off while roll (B) is
     // active, so the per-route switch (not this guard) handles Off.
@@ -88,12 +89,12 @@ void applyTilt() {
         }
         prevLatched = latched;
 
-        const float vA = latched ? latchedA : tilt::value();
-        accumTilt(c.tiltRoute, vA, c.tiltDepth, true, cutOct, vibCents, volMul);
-        if (c.tiltDual) {
-            const float vB = latched ? latchedB : tilt::valueB();
-            accumTilt(c.tiltRouteB, vB, c.tiltDepthB, false, cutOct, vibCents, volMul);
-        }
+        rawA = latched ? latchedA : tilt::value();
+        rawB = latched ? latchedB : tilt::valueB();  // read both, even if dual is off,
+                                                      // so the matrix can route roll
+        accumTilt(c.tiltRoute, rawA, c.tiltDepth, true, cutOct, vibCents, volMul);
+        if (c.tiltDual)
+            accumTilt(c.tiltRouteB, rawB, c.tiltDepthB, false, cutOct, vibCents, volMul);
         if (cutOct > 3.f) cutOct = 3.f;
         if (cutOct < -3.f) cutOct = -3.f;
         if (volMul < 0.1f) volMul = 0.1f;  // two volume routes can't hit silence
@@ -101,6 +102,8 @@ void applyTilt() {
     s.cutoffModOct = cutOct;
     s.vibratoCents = vibCents;
     s.volMod = volMul;
+    s.tiltAVal = rawA;  // matrix sources (separate from the hardwired routes above)
+    s.tiltBVal = rawB;
     s.tempoBpm = (float)c.jamBpm;  // publish the jam tempo for the synced delay
 }
 

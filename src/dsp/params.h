@@ -89,8 +89,11 @@ inline const char* filterModeName(FilterMode m) {
 // Append-only enums (values are persisted in patches): add at the end, never
 // renumber. Tilt is intentionally NOT a Pitch-capable source (tilt is never
 // pitch bend — rejected on tape).
-enum class ModSource : uint8_t { None, LFO1, LFO2, ModEnv, KeyTrack, Bend, Count };
-enum class ModDest   : uint8_t { None, Pitch, Cutoff, Resonance, Amp, FenvDepth, Count };
+// Append-only (values persist in patches): add new entries before Count, never
+// renumber. TiltA/TiltB are the live gyro axes as routable sources; Random is a
+// fresh value sampled at each note-on (per-note variation).
+enum class ModSource : uint8_t { None, LFO1, LFO2, ModEnv, KeyTrack, Bend, TiltA, TiltB, Random, Count };
+enum class ModDest   : uint8_t { None, Pitch, Cutoff, Resonance, Amp, FenvDepth, Drive, Chorus, Delay, Reverb, Count };
 enum class LfoShape  : uint8_t { Sine, Tri, Saw, Square, SH, Count };
 
 inline const char* modSourceName(ModSource s) {
@@ -100,6 +103,9 @@ inline const char* modSourceName(ModSource s) {
         case ModSource::ModEnv:   return "mod env";
         case ModSource::KeyTrack: return "key trk";
         case ModSource::Bend:     return "bend";
+        case ModSource::TiltA:    return "tilt f/b";
+        case ModSource::TiltB:    return "tilt l/r";
+        case ModSource::Random:   return "random";
         default:                  return "off";
     }
 }
@@ -110,6 +116,10 @@ inline const char* modDestName(ModDest d) {
         case ModDest::Resonance: return "reso";
         case ModDest::Amp:       return "amp";
         case ModDest::FenvDepth: return "f.env";
+        case ModDest::Drive:     return "drive";
+        case ModDest::Chorus:    return "chorus";
+        case ModDest::Delay:     return "delay";
+        case ModDest::Reverb:    return "reverb";
         default:                 return "off";
     }
 }
@@ -199,6 +209,8 @@ struct SynthParams {
     float volMod       = 1.f;  // tilt->volume multiplier (0.25..1)
     float tempoBpm     = 120.f;// the jam tempo, published each frame so a
                                // synced delay locks to it
+    float tiltAVal     = 0.f;  // raw calibrated fwd/back axis (-1..1) — the mod
+    float tiltBVal     = 0.f;  // raw calibrated roll axis — matrix source inputs
 };
 
 struct NoteEvent {
