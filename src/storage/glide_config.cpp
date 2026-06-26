@@ -241,6 +241,7 @@ void begin() {
     s.glideS   = clampT<int>(gPrefs.getInt("glide", (int)(d.synth.glideS * 1000)), 0, 2000) / 1000.f;
     s.cutoffHz = (float)clampT<int>(gPrefs.getInt("cut", (int)d.synth.cutoffHz), 80, 12000);
     s.resonance = clampT<int>(gPrefs.getInt("res", (int)(d.synth.resonance * 100)), 0, 95) / 100.f;
+    s.filterMode = (uint8_t)clampT<int>(gPrefs.getUChar("fmode", d.synth.filterMode), 0, (int)dsp::FilterMode::Count - 1);
     s.masterVol = clampT<int>(gPrefs.getInt("vol", (int)(d.synth.masterVol * 100)), 0, 100) / 100.f;
     s.detuneCents = (float)clampT<int>(gPrefs.getInt("det", (int)d.synth.detuneCents), 0, 50);
     s.voiceCount = clampT<int>(gPrefs.getUChar("voices", d.synth.voiceCount), 1, dsp::kMaxVoices);
@@ -405,6 +406,7 @@ void persistNow() {
     gPrefs.putInt("glide", (int)(s.glideS * 1000));
     gPrefs.putInt("cut", (int)s.cutoffHz);
     gPrefs.putInt("res", (int)(s.resonance * 100));
+    gPrefs.putUChar("fmode", s.filterMode);
     gPrefs.putInt("vol", (int)(s.masterVol * 100));
     gPrefs.putInt("det", (int)s.detuneCents);
     gPrefs.putUChar("voices", s.voiceCount);

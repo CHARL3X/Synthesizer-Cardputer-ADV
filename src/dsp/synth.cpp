@@ -338,14 +338,14 @@ void Synth::render(float* out, int n) {
     float resL = p_.resonance + modRes;  // matrix can push resonance
     if (resL < 0.f) resL = 0.f;
     if (resL > 0.95f) resL = 0.95f;
-    svf_.set(cutoffSm_, resL);
+    svf_.set(cutoffSm_, resL, p_.filterMode);
 
     // backing filter: its own env, NO tilt (the bed stays put under the solo)
     float cutB = pBack_.cutoffHz * exp2f(pBack_.fenvOct * fenvBack_);
     if (cutB < 60.f) cutB = 60.f;
     if (cutB > 14000.f) cutB = 14000.f;
     cutoffSmBack_ += (cutB - cutoffSmBack_) * 0.2f;
-    svfBack_.set(cutoffSmBack_, pBack_.resonance);
+    svfBack_.set(cutoffSmBack_, pBack_.resonance, pBack_.filterMode);
 
     // per-bus volume ramps (no zipper). Tilt swell only touches the lead.
     auto rampVol = [n](float target, float& sm, float& step) {

@@ -26,6 +26,7 @@ enum Tag : uint16_t {
     T_cutoffHz, T_resonance, T_masterVol, T_detuneCents, T_voiceCount,
     T_fenvAtkS, T_fenvDecS, T_fenvOct, T_subLevel, T_noiseLevel, T_drive, T_autoVibCents,
     T_chorusDepth, T_delayMix, T_delayTimeS, T_delayFb, T_delaySync, T_reverbMix, T_reverbSize,
+    T_filterMode,  // 27
 
     // modulation (mod matrix) — range 40..99
     T_lfo1Rate = 40, T_lfo1Shape, T_lfo1Sync,
@@ -61,6 +62,7 @@ int buildTable(PatchData& pd, Field* f) {
     f[n++] = {T_glideS,      T_F32, &s.glideS};
     f[n++] = {T_cutoffHz,    T_F32, &s.cutoffHz};
     f[n++] = {T_resonance,   T_F32, &s.resonance};
+    f[n++] = {T_filterMode,  T_U8,  &s.filterMode};
     f[n++] = {T_masterVol,   T_F32, &s.masterVol};
     f[n++] = {T_detuneCents, T_F32, &s.detuneCents};
     f[n++] = {T_voiceCount,  T_U8,  &s.voiceCount};

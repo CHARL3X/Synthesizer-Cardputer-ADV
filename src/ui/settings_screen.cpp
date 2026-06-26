@@ -179,6 +179,14 @@ void aDetune(int d) {
     s.detuneCents = (float)clampT((int)s.detuneCents + d * 2, 0, 50);
 }
 
+void fFilterMode(char* o, int c) {
+    snprintf(o, c, "%s", dsp::filterModeName((dsp::FilterMode)store::get().synth.filterMode));
+}
+void aFilterMode(int d) {
+    auto& s = store::get().synth;
+    s.filterMode = (uint8_t)(((int)s.filterMode + d + (int)dsp::FilterMode::Count) % (int)dsp::FilterMode::Count);
+}
+
 void fRes(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().synth.resonance * 100)); }
 void aRes(int d) {
     auto& s = store::get().synth;
@@ -392,6 +400,7 @@ const Item kItems[] = {
     {"Sound reset", fPatchReset, aPatchReset},
     {"Bend time", fBendMs, aBendMs},
     {"Fat detune", fDetune, aDetune},
+    {"Filter mode", fFilterMode, aFilterMode},
     {"Resonance", fRes, aRes},
     {"EFFECTS", nullptr, nullptr},
     {"Chorus", fChorus, aChorus},

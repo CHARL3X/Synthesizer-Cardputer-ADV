@@ -67,6 +67,19 @@ inline const char* waveformName(Waveform w) {
     }
 }
 
+// Filter response. The SVF computes all of these for free; LP is the original
+// voice (default), the rest open up new timbres (HP = thin/airy, BP = vocal/
+// telephone, notch = hollow/phasey).
+enum class FilterMode : uint8_t { LP, HP, BP, Notch, Count };
+inline const char* filterModeName(FilterMode m) {
+    switch (m) {
+        case FilterMode::HP:    return "highpass";
+        case FilterMode::BP:    return "bandpass";
+        case FilterMode::Notch: return "notch";
+        default:                return "lowpass";
+    }
+}
+
 // ---- modulation matrix ----------------------------------------------------
 // A few mod SOURCES routed to DESTINATIONS by a depth — N×M sound-design space
 // from a handful of primitives. Everything defaults neutral (every slot None,
@@ -140,6 +153,7 @@ struct SynthParams {
     float glideS   = 0.12f;   // THE core parameter — portamento time
     float cutoffHz = 4000.f;
     float resonance = 0.30f;  // 0..0.95
+    uint8_t filterMode = 0;   // FilterMode: 0=LP (default, the original voice)
     float masterVol = 0.70f;  // 0..1
     float detuneCents = 12.f; // fat-saw spread
     uint8_t voiceCount = 6;   // held-voice cap (1..kMaxVoices)

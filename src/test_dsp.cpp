@@ -465,6 +465,25 @@ int main() {
         CHECK(pk > 0.005f && pk < 1.4f, "ModEnv->Cutoff renders audible & bounded");
     }
 
+    // ---- filter modes (LP/HP/BP/notch) render finite & bounded ------------
+    {
+        Synth sf;
+        sf.init(kSr);
+        for (int m = 0; m < (int)FilterMode::Count; ++m) {
+            SynthParams fp;
+            fp.glideS = 0.05f;
+            fp.cutoffHz = 1200.f;
+            fp.resonance = 0.5f;
+            fp.filterMode = (uint8_t)m;
+            sf.setParams(fp);
+            sf.handleEvent(NoteEvent::make(NoteEvent::On, (uint8_t)(80 + m), 0xFF, false, 69.f));
+            const float pk = peakOf(sf, 30);
+            CHECK(pk > 0.f && pk < 1.5f, "filter mode renders bounded");
+            sf.handleEvent(NoteEvent::make(NoteEvent::AllOff, 0, 0xFF, false, 0.f));
+            peakOf(sf, 60);
+        }
+    }
+
     if (failures == 0) {
         printf("GLIDE dsp: all checks passed\n");
         return 0;
