@@ -668,6 +668,26 @@ int main() {
         rel(gentle.synth.drive, base.synth.drive, 5.f);
         rel(gentle.synth.releaseS, base.synth.releaseS, 2.f);
         CHECK(near >= tot - 1, "a gentle mutate preserves character (neighbour, not a new roll)");
+
+        // ---- patch naming: deterministic, terminated, content-sensitive -----
+        CHECK(patchHash(base) == patchHash(base), "patchHash deterministic");
+        CHECK(patchHash(base) != patchHash(generateSound(7u)), "patchHash separates patches");
+        char nm[24], nm2[24];
+        nameForSeed(patchHash(base), nm, sizeof nm);
+        nameForSeed(patchHash(base), nm2, sizeof nm2);
+        CHECK(strcmp(nm, nm2) == 0, "nameForSeed deterministic");
+        CHECK(strlen(nm) > 0 && strlen(nm) < sizeof nm, "name fits and is non-empty");
+        bool hasDash = false;
+        for (const char* c = nm; *c; ++c) {
+            const bool ok = (*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '-';
+            CHECK(ok, "name uses only filename-safe chars");
+            if (*c == '-') hasDash = true;
+        }
+        CHECK(hasDash, "name has the adj-noun-hex shape");
+        // a tiny cap must still be safely terminated, never overrun
+        char tiny[4];
+        nameForSeed(0xABCDEF12u, tiny, sizeof tiny);
+        CHECK(tiny[3] == '\0' || strlen(tiny) < 4, "name respects a small cap");
     }
 
     if (failures == 0) {

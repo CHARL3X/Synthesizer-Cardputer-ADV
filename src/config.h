@@ -50,6 +50,26 @@ constexpr int   kTiltAxisB = 0;     // 0=x 1=y 2=z  — left/right roll
 constexpr float kTiltSignB = 1.0f;
 constexpr float kTiltSmooth = 0.15f; // per-frame smoothing toward raw reading
 
+// ---- microSD (SPI) — the personal patch library lives here ------------
+// The SD card is where a player's generative collection grows past the ten
+// fast NVS slots: roll a sound you love, save it here, browse them all back.
+//
+// HARDWARE-UNVERIFIED (Phase 0 spirit): these are the standard M5Cardputer
+// SD/SPI pins. The Cardputer ADV's pinout may differ — CONFIRM against your
+// unit before trusting SD. If SD.begin() fails the instrument runs fully on
+// its built-in NVS slots and the library simply reports "no SD"; nothing about
+// playing the instrument depends on the card. Set kSdEnabled=false to compile
+// the SD path out entirely. If saves don't appear, the CS/clock pins are the
+// first suspects — fix them here.
+constexpr bool     kSdEnabled = true;
+constexpr int      kSdSckPin  = 40;   // SPI clock   — VERIFY on ADV
+constexpr int      kSdMisoPin = 39;   // SPI MISO    — VERIFY on ADV
+constexpr int      kSdMosiPin = 14;   // SPI MOSI    — VERIFY on ADV
+constexpr int      kSdCsPin   = 12;   // SD chip-sel — VERIFY on ADV
+constexpr uint32_t kSdFreqHz  = 25000000;
+constexpr const char* kSdDir  = "/glide";        // patch-library folder on the card
+constexpr const char* kSdExt  = ".gpat";         // one patch per file (tagged codec)
+
 // ---- onboard RGB LED (WS2812 / SK6812) --------------------------------
 // A second display: the lead voice's pitch picks the hue (chromatic color
 // wheel — C is red and it rotates up by semitone), note activity drives the

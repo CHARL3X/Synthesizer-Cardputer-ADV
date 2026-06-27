@@ -8,6 +8,7 @@
 #include "../dsp/patches.h"
 #include "../dsp/pitch.h"
 #include "../dsp/sound_gen.h"
+#include "patch_codec.h"  // store::PatchData (the SD/NVS-shared patch unit)
 
 namespace store {
 
@@ -138,6 +139,7 @@ uint32_t deviceSeed();                 // this unit's stable unique seed
 void reRollBank();                     // a whole new instrument: regenerate w..p
                                        // from a fresh seed (q stays GLIDE), then
                                        // reload the current slot live
+void applyStoredPatch(const PatchData& pd);   // load an SD-library patch -> live
 void applyGenerated(const dsp::GenPatch& g);  // load a rolled/mutated sound ->
                                        // live working sound (keeps master vol;
                                        // not a slot until you save it)

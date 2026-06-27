@@ -46,4 +46,15 @@ GenPatch generateSound(uint32_t seed);
 // amount == 0 returns `base` unchanged.
 GenPatch mutateSound(const GenPatch& base, float amount, uint32_t seed);
 
+// A stable hash of a patch's audible character. Deterministic and padding-safe
+// (hashes named fields, not raw bytes): the same sound always hashes the same.
+// Used to name a patch from its own contents.
+uint32_t patchHash(const GenPatch& g);
+
+// Build an evocative, deterministic name from `seed`, e.g. "warm-haze-3f"
+// (adjective-noun-hex). Always null-terminated within `cap`. Pure, so the same
+// sound — fed patchHash(g) — always names itself the same way. This is how a
+// generated sound becomes "yours" rather than "patch-07".
+void nameForSeed(uint32_t seed, char* out, int cap);
+
 }  // namespace dsp

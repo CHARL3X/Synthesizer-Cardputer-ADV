@@ -189,4 +189,67 @@ GenPatch mutateSound(const GenPatch& base, float amount, uint32_t seed) {
     return g;
 }
 
+// ---- patch naming -----------------------------------------------------------
+namespace {
+// FNV-1a step.
+inline uint32_t fnv(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
+// Fold a float into the hash via its quantised value (so tiny float noise
+// doesn't change the name, and there are no raw-byte/padding hazards).
+inline uint32_t fhash(uint32_t h, float v, float q) { return fnv(h, (uint32_t)(int32_t)(v * q)); }
+
+const char* const kAdjs[] = {
+    "warm", "bright", "dark", "glassy", "fuzzy", "lush", "hollow", "sharp",
+    "deep", "soft", "neon", "dusty", "velvet", "frost", "ember", "tidal",
+};
+const char* const kNouns[] = {
+    "haze", "comet", "drift", "pulse", "bloom", "grain", "choir", "river",
+    "spark", "cavern", "prism", "vapor", "signal", "tide", "husk", "moss",
+};
+}  // namespace
+
+uint32_t patchHash(const GenPatch& g) {
+    const SynthParams& s = g.synth;
+    uint32_t h = 2166136261u;
+    h = fnv(h, (uint32_t)s.wave);
+    h = fnv(h, (uint32_t)s.glideMode);
+    h = fnv(h, (uint32_t)s.filterMode);
+    h = fhash(h, s.cutoffHz, 0.05f);
+    h = fhash(h, s.resonance, 100.f);
+    h = fhash(h, s.attackS, 1000.f);
+    h = fhash(h, s.decayS, 1000.f);
+    h = fhash(h, s.sustain, 100.f);
+    h = fhash(h, s.releaseS, 1000.f);
+    h = fhash(h, s.glideS, 1000.f);
+    h = fhash(h, s.detuneCents, 10.f);
+    h = fhash(h, s.fenvOct, 100.f);
+    h = fhash(h, s.subLevel, 100.f);
+    h = fhash(h, s.drive, 100.f);
+    h = fhash(h, s.chorusDepth, 100.f);
+    h = fhash(h, s.delayMix, 100.f);
+    h = fhash(h, s.reverbMix, 100.f);
+    h = fhash(h, s.lfo1RateHz, 100.f);
+    h = fhash(h, s.lfo2RateHz, 100.f);
+    for (int i = 0; i < kModSlots; ++i) {
+        h = fnv(h, (uint32_t)s.slots[i].src);
+        h = fnv(h, (uint32_t)s.slots[i].dest);
+        h = fhash(h, s.slots[i].depth, 100.f);
+    }
+    h = fnv(h, (uint32_t)g.tiltRoute);
+    h = fnv(h, (uint32_t)g.tiltRouteB);
+    return h ? h : 1u;
+}
+
+void nameForSeed(uint32_t seed, char* out, int cap) {
+    if (cap <= 0) return;
+    const char* adj = kAdjs[(seed >> 3) & 15];
+    const char* noun = kNouns[(seed >> 11) & 15];
+    const char hexd[] = "0123456789abcdef";
+    const char tag[3] = {hexd[(seed >> 4) & 15], hexd[seed & 15], '\0'};
+    // assemble "adj-noun-xx" by hand (no snprintf — keep dsp/ free of <cstdio>)
+    int n = 0;
+    auto put = [&](const char* s) { for (; *s && n < cap - 1; ++s) out[n++] = *s; };
+    put(adj); put("-"); put(noun); put("-"); put(tag);
+    out[n] = '\0';
+}
+
 }  // namespace dsp

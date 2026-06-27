@@ -661,6 +661,11 @@ void applyGenerated(const dsp::GenPatch& g) {
     markDirty();         // the live sound changed — persist the flat keys
 }
 
+void applyStoredPatch(const PatchData& pd) {
+    applyPatchData(pd);  // an SD-library load lands live, like a roll — not a
+    markDirty();         // slot until the player shift-saves it onto one
+}
+
 void reRollBank() {
     // A whole new instrument. Roll a fresh seed so this is genuinely different
     // from last time (not a repeat of the boot bank), then regenerate every

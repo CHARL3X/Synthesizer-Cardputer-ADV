@@ -1,26 +1,35 @@
 #include "settings_screen.h"
 
+#include <esp_random.h>
+
 #include <cstdio>
+#include <cstring>
 
 #include "../config.h"
 #include "../dsp/params.h"
 #include "../dsp/patches.h"
 #include "../dsp/scales.h"
+#include "../dsp/sound_gen.h"
 #include "../io/audio_engine.h"
 #include "../io/keys.h"
 #include "../io/looper.h"
+#include "../io/sd_store.h"
 #include "../io/tilt.h"
 #include "../storage/glide_config.h"
 #include "help.h"
+#include "sd_browser.h"
 #include "theme.h"
 
 namespace settings {
 
 namespace {
 
-bool gOpenHelp = false;  // set by the Help item; run() opens the modal (it owns the canvas)
-int gFlashRow = -1;      // a one-shot row blink confirming an action fired
+bool gOpenHelp = false;   // set by the Help item; run() opens the modal (it owns the canvas)
+bool gOpenSdLoad = false; // set by "Load from SD"; run() opens the browser modal
+int gFlashRow = -1;       // a one-shot row blink confirming an action fired
 uint32_t gFlashUntil = 0;
+float gMutateAmt = 0.30f; // how far each Mutate roams (session pref; 0..1)
+char gLastSaved[24] = ""; // name of the most recent Save to SD (shown in its row)
 
 // positional key codes (y*14+x) — same convention as keys.cpp
 constexpr int kUp = 39;     // ;
@@ -400,15 +409,6 @@ void fHelp(char* o, int c) { snprintf(o, c, "open ->"); }
 void aHelp(int) { gOpenHelp = true; }  // run() does the actual modal open
 
 // ---- sound-design starting points -----------------------------------------
-// A tiny LCG for the randomizer (seeded lazily off millis — this is UI code,
-// not dsp/, so non-determinism is fine here).
-uint32_t gRng = 0;
-float rndf() {
-    gRng = gRng * 1664525u + 1013904223u;
-    return (float)(gRng >> 8) * (1.f / 16777216.f);  // 0..1
-}
-int rndi(int lo, int hi) { return lo + (int)(rndf() * (hi - lo + 1)); }
-
 void pushLiveSound() {  // apply the working sound to the engine + persist
     auto& g = store::get();
     g.synth.tempoBpm = (float)g.jamBpm;
@@ -474,58 +474,93 @@ void tickPreview() {
     if (gPreviewStep >= kPhraseLen) gPreviewT0 = 0;  // done — the tail is the engine's to finish
 }
 
+// Build a GenPatch snapshot of the live sound (for mutate / naming / saving).
+dsp::GenPatch liveAsGen() {
+    const auto& g = store::get();
+    dsp::GenPatch gp;
+    gp.synth = g.synth;
+    gp.tiltRoute = (uint8_t)g.tiltRoute;
+    gp.tiltDepth = g.tiltDepth;
+    gp.tiltRouteB = (uint8_t)g.tiltRouteB;
+    gp.tiltDepthB = g.tiltDepthB;
+    return gp;
+}
+
 void fInitSound(char* o, int c) { snprintf(o, c, "blank slate ,/"); }
 void aInitSound(int) {
     auto& g = store::get();
+    store::historyCheckpoint();                // undoable — never trash a sound
     const float vol = g.synth.masterVol;       // keep the player's level
     g.synth = dsp::SynthParams();              // neutral: plain saw, no FX, no mod
     g.synth.masterVol = vol;
     pushLiveSound();
 }
 
+// THE button. Roll a whole new patch from a fresh hardware-random seed, land it
+// live, and audition it on the spot — hit it until it sings. Nothing is saved
+// until you shift-save onto a slot, so a roll can never wreck a sound you kept.
 void fRandomize(char* o, int c) { snprintf(o, c, "surprise me ,/"); }
 void aRandomize(int) {
-    auto& g = store::get();
-    if (gRng == 0) gRng = (uint32_t)millis() * 2654435761u + 1u;
-    const float vol = g.synth.masterVol;
-    dsp::SynthParams s;  // start neutral, then paint within musical bounds
-    s.wave = (dsp::Waveform)rndi(0, (int)dsp::Waveform::Count - 1);
-    s.filterMode = (uint8_t)(rndf() < 0.6f ? 0 : rndi(0, (int)dsp::FilterMode::Count - 1));
-    s.cutoffHz = 400.f + rndf() * rndf() * 7000.f;  // skew bright-but-not-harsh
-    s.resonance = rndf() * 0.6f;
-    s.attackS = rndf() * rndf() * 0.4f;
-    s.decayS = 0.05f + rndf() * 0.6f;
-    s.sustain = 0.3f + rndf() * 0.7f;
-    s.releaseS = 0.1f + rndf() * 0.8f;
-    s.glideS = rndf() * rndf() * 0.25f;
-    s.detuneCents = rndf() < 0.5f ? 0.f : rndf() * 18.f;
-    s.fenvOct = rndf() < 0.5f ? 0.f : rndf() * 2.f;
-    s.fenvDecS = 0.1f + rndf() * 0.6f;
-    s.subLevel = rndf() < 0.6f ? 0.f : rndf() * 0.7f;
-    s.drive = 1.f + rndf() * rndf() * 4.f;
-    if (rndf() < 0.5f) s.reverbMix = rndf() * 0.5f;
-    if (rndf() < 0.4f) { s.delayMix = rndf() * 0.4f; s.delaySync = (uint8_t)rndi(1, 5); }
-    if (rndf() < 0.4f) s.chorusDepth = rndf() * 0.6f;
-    // movement: give BOTH LFOs and the mod-env real settings up front, so
-    // whatever a routing slot lands on (LFO1/2, mod-env, key-track, S&H...)
-    // actually moves. Then route up to three slots — more of the engine in
-    // play per roll means richer, less samey results.
-    s.lfo1RateHz = 0.15f + rndf() * rndf() * 9.f;  // skew slow, with the odd fast one
-    s.lfo1Shape  = (uint8_t)rndi(0, (int)dsp::LfoShape::Count - 1);
-    s.lfo2RateHz = 0.1f + rndf() * rndf() * 6.f;
-    s.lfo2Shape  = (uint8_t)rndi(0, (int)dsp::LfoShape::Count - 1);
-    s.modEnvAtkS = rndf() * rndf() * 0.5f;
-    s.modEnvDecS = 0.08f + rndf() * 1.2f;
-    const int nmod = rndi(0, 3);  // 0-3 routings
-    for (int i = 0; i < nmod && i < dsp::kModSlots; ++i) {
-        const dsp::ModSource src = (dsp::ModSource)rndi(1, (int)dsp::ModSource::Count - 1);
-        const dsp::ModDest dst = (dsp::ModDest)rndi(1, (int)dsp::ModDest::Count - 1);
-        s.slots[i] = dsp::ModSlot::make(src, dst, (rndf() * 2.f - 1.f) * 0.6f);
+    store::historyCheckpoint();
+    store::applyGenerated(dsp::generateSound(esp_random()));
+    startPreview();
+}
+
+// Evolve the CURRENT sound instead of rolling fresh — sculpt toward a vibe. The
+// amount knob below sets how far it roams.
+void fMutate(char* o, int c) { snprintf(o, c, "evolve this ,/"); }
+void aMutate(int) {
+    store::historyCheckpoint();
+    store::applyGenerated(dsp::mutateSound(liveAsGen(), gMutateAmt, esp_random()));
+    startPreview();
+}
+
+void fMutAmt(char* o, int c) { snprintf(o, c, "%d %%", (int)(gMutateAmt * 100 + 0.5f)); }
+void aMutAmt(int d) { gMutateAmt = clampT(gMutateAmt + d * 0.05f, 0.05f, 1.f); }
+
+// Non-destructive history: step back to a sound you had, or forward again.
+void fUndo(char* o, int c) {
+    const int d = store::historyUndoDepth();
+    if (d > 0) snprintf(o, c, "step back (%d) ,/", d);
+    else       snprintf(o, c, "(nothing back)");
+}
+void aUndo(int) { if (store::historyUndo()) startPreview(); }
+void fRedo(char* o, int c) {
+    snprintf(o, c, "%s", store::historyCanRedo() ? "step forward ,/" : "(nothing fwd)");
+}
+void aRedo(int) { if (store::historyRedo()) startPreview(); }
+
+// Save the live sound to the SD library under an auto-generated, evocative name
+// (e.g. "warm-haze-3f") derived from the sound itself — so it's reproducibly
+// yours. Shows the name in the row on success.
+void fSaveSd(char* o, int c) { snprintf(o, c, "%s", gLastSaved[0] ? gLastSaved : "to SD card ,/"); }
+void aSaveSd(int) {
+    const dsp::GenPatch gp = liveAsGen();
+    char name[24];
+    dsp::nameForSeed(dsp::patchHash(gp), name, sizeof name);
+    store::PatchData pd;
+    pd.synth = gp.synth;
+    pd.synth.bendCents = 0.f; pd.synth.vibratoCents = 0.f;  // never bake live-mods
+    pd.synth.cutoffModOct = 0.f; pd.synth.volMod = 1.f; pd.synth.tempoBpm = 120.f;
+    pd.tiltRoute = gp.tiltRoute; pd.tiltDepth = gp.tiltDepth;
+    pd.tiltRouteB = gp.tiltRouteB; pd.tiltDepthB = gp.tiltDepthB;
+    if (sdstore::save(name, pd)) {
+        strncpy(gLastSaved, name, sizeof gLastSaved - 1);
+        gLastSaved[sizeof gLastSaved - 1] = '\0';
+    } else {
+        snprintf(gLastSaved, sizeof gLastSaved, "no SD");
     }
-    s.masterVol = vol;
-    g.synth = s;
-    pushLiveSound();
-    startPreview();  // audition it on the spot — hit Randomize until it sings
+}
+
+void fLoadSd(char* o, int c) { snprintf(o, c, "browse card ,/"); }
+void aLoadSd(int) { gOpenSdLoad = true; }  // run() opens the browser modal
+
+// A whole new instrument: regenerate the nine non-anchor slots (w..p) from a
+// fresh seed. q stays GLIDE. Deliberate and destructive, like Reset all sounds.
+void fReRoll(char* o, int c) { snprintf(o, c, "new bank w..p ,/"); }
+void aReRoll(int) {
+    store::reRollBank();   // reloads the current slot live
+    startPreview();
 }
 
 const Item kItems[] = {
@@ -553,9 +588,16 @@ const Item kItems[] = {
     {"Tilt l/r route", fTiltB, aTiltB},
     {"Tilt l/r depth", fTiltDepthB, aTiltDepthB, true},
     {"Tilt center", fTiltCenter, aTiltCenter},
-    {"SOUND", nullptr, nullptr},
-    {"Init sound", fInitSound, aInitSound},
+    {"SOUND (roll your own)", nullptr, nullptr},
     {"Randomize", fRandomize, aRandomize},
+    {"Mutate", fMutate, aMutate},
+    {"Mutate amt", fMutAmt, aMutAmt, true},
+    {"Undo", fUndo, aUndo},
+    {"Redo", fRedo, aRedo},
+    {"Init sound", fInitSound, aInitSound},
+    {"Save to SD", fSaveSd, aSaveSd},
+    {"Load from SD", fLoadSd, aLoadSd},
+    {"Re-roll bank", fReRoll, aReRoll},
     {"Sound reset", fPatchReset, aPatchReset},
     {"Reset all sounds", fAllSoundsReset, aAllSoundsReset},
     {"Bend time", fBendMs, aBendMs, true},
@@ -644,7 +686,8 @@ int buildVisible(int* vis) {  // indices of currently-shown rows (headers + non-
 bool isActionRow(int i) {
     if (isHeader(i)) return false;
     const auto a = kItems[i].adjust;
-    return a == aInitSound || a == aRandomize || a == aPatchReset ||
+    return a == aInitSound || a == aRandomize || a == aMutate || a == aUndo ||
+           a == aRedo || a == aSaveSd || a == aReRoll || a == aPatchReset ||
            a == aAllSoundsReset || a == aReset;
 }
 
@@ -819,6 +862,22 @@ void run(M5Canvas& canvas) {
             gOpenHelp = false;
             help::run(canvas);
             prev = ~0ULL;  // treat keys held across the modal as already-down
+            draw(canvas, sel, top);
+            continue;
+        }
+
+        if (gOpenSdLoad) {  // "Load from SD" asked to open the library browser
+            gOpenSdLoad = false;
+            char nm[24] = {0};
+            const bool loaded = sdbrowser::run(canvas, nm, sizeof nm);
+            prev = ~0ULL;
+            if (loaded) {  // the browser already applied it live + checkpointed
+                auto& g = store::get();
+                g.synth.tempoBpm = (float)g.jamBpm;
+                audio::setParams(g.synth, g.backingLocked ? g.backingSynth : g.synth);
+                store::persistNow();
+                startPreview();  // audition the loaded sound on return
+            }
             draw(canvas, sel, top);
             continue;
         }
