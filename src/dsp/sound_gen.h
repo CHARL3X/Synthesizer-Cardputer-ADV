@@ -51,10 +51,17 @@ GenPatch mutateSound(const GenPatch& base, float amount, uint32_t seed);
 // Used to name a patch from its own contents.
 uint32_t patchHash(const GenPatch& g);
 
-// Build an evocative, deterministic name from `seed`, e.g. "warm-haze-3f"
+// Build an evocative, deterministic name from `seed`, e.g. "warm-haze-3f2a"
 // (adjective-noun-hex). Always null-terminated within `cap`. Pure, so the same
 // sound — fed patchHash(g) — always names itself the same way. This is how a
-// generated sound becomes "yours" rather than "patch-07".
+// generated sound becomes "yours" rather than "patch-07". Used for SD filenames
+// and the library browser, where there's room for the full name.
 void nameForSeed(uint32_t seed, char* out, int cap);
+
+// A COMPACT label from the same seed — one word (the noun, e.g. "haze"), ≤6
+// chars — for the cramped status-bar slot spot, where a full name wouldn't fit
+// beside the scale/octave readouts. Shares the noun with nameForSeed(), so a
+// slot labelled "haze" and its SD file "warm-haze-3f2a" read as the same sound.
+void shortNameForSeed(uint32_t seed, char* out, int cap);
 
 }  // namespace dsp

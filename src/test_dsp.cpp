@@ -688,6 +688,15 @@ int main() {
         char tiny[4];
         nameForSeed(0xABCDEF12u, tiny, sizeof tiny);
         CHECK(tiny[3] == '\0' || strlen(tiny) < 4, "name respects a small cap");
+
+        // short label (slot display): one word, fits the cramped status bar,
+        // shares its noun with the full name so they read as the same sound.
+        char sh[8];
+        shortNameForSeed(patchHash(base), sh, sizeof sh);
+        CHECK(strlen(sh) > 0 && strlen(sh) <= 6, "short name is a compact (<=6) label");
+        for (const char* c = sh; *c; ++c)
+            CHECK(*c >= 'a' && *c <= 'z', "short name is a single lowercase word");
+        CHECK(strstr(nm, sh) != nullptr, "short name's noun appears in the full name");
     }
 
     if (failures == 0) {

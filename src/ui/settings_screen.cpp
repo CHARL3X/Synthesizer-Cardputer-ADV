@@ -30,6 +30,8 @@ int gFlashRow = -1;       // a one-shot row blink confirming an action fired
 uint32_t gFlashUntil = 0;
 float gMutateAmt = 0.30f; // how far each Mutate roams (session pref; 0..1)
 char gLastSaved[24] = ""; // name of the most recent Save to SD (shown in its row)
+bool gReRollArmed = false;     // Re-roll bank is irreversible -> two-tap confirm
+uint32_t gReRollArmedAt = 0;
 
 // positional key codes (y*14+x) — same convention as keys.cpp
 constexpr int kUp = 39;     // ;
@@ -556,11 +558,24 @@ void fLoadSd(char* o, int c) { snprintf(o, c, "browse card ,/"); }
 void aLoadSd(int) { gOpenSdLoad = true; }  // run() opens the browser modal
 
 // A whole new instrument: regenerate the nine non-anchor slots (w..p) from a
-// fresh seed. q stays GLIDE. Deliberate and destructive, like Reset all sounds.
-void fReRoll(char* o, int c) { snprintf(o, c, "new bank w..p ,/"); }
+// fresh seed. q stays GLIDE. This OVERWRITES any sounds saved in w..p with new
+// random ones and can't be undone — so unlike Randomize/Mutate (which only
+// touch the undoable live sound), it asks for a confirming second tap.
+constexpr uint32_t kReRollArmMs = 3000;
+bool reRollArmed() { return gReRollArmed && (millis() - gReRollArmedAt < kReRollArmMs); }
+void fReRoll(char* o, int c) {
+    snprintf(o, c, "%s", reRollArmed() ? "SURE? tap again" : "re-roll bank ,/");
+}
 void aReRoll(int) {
-    store::reRollBank();   // reloads the current slot live
-    startPreview();
+    if (reRollArmed()) {
+        gReRollArmed = false;
+        store::historyCheckpoint();  // the live sound stays recoverable via Undo
+        store::reRollBank();         // ...the slots do not — hence the confirm
+        startPreview();
+    } else {
+        gReRollArmed = true;         // first tap arms; second within 3s confirms
+        gReRollArmedAt = millis();
+    }
 }
 
 const Item kItems[] = {
@@ -802,6 +817,7 @@ void run(M5Canvas& canvas) {
     // quiet the solo layer; latched drones keep ringing so every edit is
     // heard live against the backing — sound design with your ears on
     audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::LeadsOff, 0));
+    gReRollArmed = false;  // never enter settings with a stale re-roll confirm armed
 
     int sel = step(kItemCount - 1, +1);  // first selectable item (skip the header)
     int top = 0;

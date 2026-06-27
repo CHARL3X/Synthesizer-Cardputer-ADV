@@ -241,14 +241,28 @@ uint32_t patchHash(const GenPatch& g) {
 
 void nameForSeed(uint32_t seed, char* out, int cap) {
     if (cap <= 0) return;
-    const char* adj = kAdjs[(seed >> 3) & 15];
-    const char* noun = kNouns[(seed >> 11) & 15];
+    // Pull the word choices and the hex tag from DIFFERENT bit ranges, and use a
+    // full 16-bit tag (four hex digits). That keeps the name near-collision-free
+    // — different sounds get different names, so a Save-to-SD never silently
+    // clobbers a different sound — while staying idempotent (same sound -> same
+    // hash -> same name, so re-saving just overwrites itself).
+    const char* adj = kAdjs[(seed >> 16) & 15];
+    const char* noun = kNouns[(seed >> 20) & 15];
     const char hexd[] = "0123456789abcdef";
-    const char tag[3] = {hexd[(seed >> 4) & 15], hexd[seed & 15], '\0'};
-    // assemble "adj-noun-xx" by hand (no snprintf — keep dsp/ free of <cstdio>)
+    const char tag[5] = {hexd[(seed >> 12) & 15], hexd[(seed >> 8) & 15],
+                         hexd[(seed >> 4) & 15], hexd[seed & 15], '\0'};
+    // assemble "adj-noun-xxxx" by hand (no snprintf — keep dsp/ free of <cstdio>)
     int n = 0;
     auto put = [&](const char* s) { for (; *s && n < cap - 1; ++s) out[n++] = *s; };
     put(adj); put("-"); put(noun); put("-"); put(tag);
+    out[n] = '\0';
+}
+
+void shortNameForSeed(uint32_t seed, char* out, int cap) {
+    if (cap <= 0) return;
+    const char* noun = kNouns[(seed >> 20) & 15];  // same noun nameForSeed uses
+    int n = 0;
+    for (; noun[n] && n < cap - 1; ++n) out[n] = noun[n];
     out[n] = '\0';
 }
 

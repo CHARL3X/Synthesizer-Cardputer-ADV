@@ -23,6 +23,15 @@ uint16_t gOverrideMask = 0;  // cached per-slot override flags — the UI asks
                              // every frame; NVS must not be in that path
 uint32_t gSeed = 0;          // this unit's stable unique seed (persisted)
 
+// Cached display name per slot. A factory (un-overridden) slot shows its real
+// instrument name ("GLIDE"); any custom slot — generated at first boot, saved,
+// or re-rolled — shows a compact label derived from the SOUND itself ("haze"),
+// so what you see matches what you hear and never falsely reads as a factory
+// instrument. (The full evocative name "warm-haze-3f2a" is the SD filename.)
+// Recomputed only when a slot changes (boot / save / clear / re-roll);
+// patchName() is a per-UI-frame call and must stay a cheap lookup, never NVS.
+char gSlotNames[dsp::kPatchCount][24] = {};
+
 // ---- non-destructive live-sound history (RAM only) ------------------------
 // A two-stack undo/redo over the live working sound. checkpoint() pushes the
 // current sound onto the undo stack (and drops any redo tail); undo/redo swap
@@ -208,6 +217,35 @@ void snapshotLive(PatchData& pd) {
     pd.tiltDepthB = gCfg.tiltDepthB;
 }
 
+// Recompute a slot's cached display name. Custom slots are named from their own
+// sound (so a generated/saved slot reads as "warm-haze-3f2a", matching what it
+// sounds like); factory slots keep their instrument name. Manual string copy so
+// glide_config stays free of <cstring> for this.
+void cacheSlotName(int slot) {
+    if (slot < 0 || slot >= dsp::kPatchCount) return;
+    char* dst = gSlotNames[slot];
+    const int cap = (int)sizeof gSlotNames[slot];
+    if ((gOverrideMask >> slot) & 1u) {
+        PatchData pd;
+        loadPatchData(slot, pd);
+        dsp::GenPatch g;
+        g.synth = pd.synth;
+        g.tiltRoute = pd.tiltRoute;
+        g.tiltDepth = pd.tiltDepth;
+        g.tiltRouteB = pd.tiltRouteB;
+        g.tiltDepthB = pd.tiltDepthB;
+        dsp::shortNameForSeed(dsp::patchHash(g), dst, cap);  // compact: fits the status bar
+    } else {
+        const char* fn = dsp::factoryPatches()[slot].name;
+        int i = 0;
+        for (; fn[i] && i < cap - 1; ++i) dst[i] = fn[i];
+        dst[i] = '\0';
+    }
+}
+void cacheAllSlotNames() {
+    for (int i = 0; i < dsp::kPatchCount; ++i) cacheSlotName(i);
+}
+
 // Push onto a capped stack; drop the oldest if full (shift down by one).
 void histPush(PatchData* stack, int& len, const PatchData& pd) {
     if (len >= kHist) {
@@ -331,6 +369,11 @@ void begin() {
         }
         gPrefs.putBool("bankgen", true);  // even on an existing device: mark done
     }
+
+    // Display names: generated/saved slots read as their evocative content name,
+    // factory slots as their instrument name. Done once the override mask is
+    // final (after any first-boot generation above).
+    cacheAllSlotNames();
 
     auto& s = gCfg.synth;
     s.wave = (dsp::Waveform)clampT<int>(gPrefs.getUChar("wave", (uint8_t)d.synth.wave), 0,
@@ -633,6 +676,7 @@ bool savePatch(int slot) {
     if (ok) {
         gOverrideMask |= (uint16_t)(1u << slot);
         gCfg.currentPatch = (uint8_t)slot;
+        cacheSlotName(slot);  // the slot now reads as its own sound's name
         markDirty();
     }
     return ok;
@@ -644,11 +688,14 @@ void clearOverride(int slot) {
     patchKey(slot, key);
     gPrefs.remove(key);
     gOverrideMask &= (uint16_t)~(1u << slot);
+    cacheSlotName(slot);  // back to the factory instrument name
 }
 
 const char* patchName(int slot) {
     if (slot < 0 || slot >= dsp::kPatchCount) return "?";
-    return dsp::factoryPatches()[slot].name;
+    // cached content name for custom slots, factory name otherwise (empty cache
+    // entry — shouldn't happen post-begin — falls back to the factory name)
+    return gSlotNames[slot][0] ? gSlotNames[slot] : dsp::factoryPatches()[slot].name;
 }
 
 // ---- generative sound -------------------------------------------------------
@@ -675,11 +722,12 @@ void reRollBank() {
     gSeed = esp_random();
     if (gSeed == 0) gSeed = 0x9E3779B9u;
     if (gNvsOk) gPrefs.putUInt("seed", gSeed);
-    clearOverride(0);  // q back to factory GLIDE
+    clearOverride(0);  // q back to factory GLIDE (also refreshes its name)
     for (int i = 1; i < dsp::kPatchCount; ++i) {
         PatchData pd;
         genToPatchData(dsp::generateSound(slotSeed(gSeed, i)), pd);
         writeOverride(i, pd);
+        cacheSlotName(i);  // each new slot reads as its own sound's name
     }
     applyPatch(gCfg.currentPatch);  // reload whatever slot is current, live
 }
