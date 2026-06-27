@@ -38,6 +38,14 @@ char gSlotNames[dsp::kPatchCount][24] = {};
 // holds by construction — no per-surface recompute that could drift.
 char gLiveName[24] = {};
 
+// Content hash of the CURRENT slot's stored sound — the "saved reference" the
+// live sound is compared against to tell whether there are UNSAVED edits
+// (liveDirty()). Recomputed only when the reference changes (load a slot, save
+// onto the current slot, clear/re-roll it, boot) — never per UI frame, which
+// would put NVS in the draw path. The per-frame compare is then a cheap
+// patchHash of the live sound vs this cached value.
+uint32_t gCurSlotHash = 0;
+
 // ---- non-destructive live-sound history (RAM only) ------------------------
 // A two-stack undo/redo over the live working sound. checkpoint() pushes the
 // current sound onto the undo stack (and drops any redo tail); undo/redo swap
@@ -225,6 +233,35 @@ void genToPatchData(const dsp::GenPatch& g, PatchData& pd) {
 // unit's nine generated slots are all different yet reproducible from its seed.
 uint32_t slotSeed(uint32_t seed, int slot) {
     return seed ^ (0x9E3779B9u * (uint32_t)(slot + 1));
+}
+
+// Content hash of a sound (synth + tilt personality). Uses dsp::patchHash, which
+// deliberately ignores master volume and the live bend/tilt mod fields — so it's
+// a hash of the SOUND, not the moment. Shared by the live-name logic and the
+// unsaved-edit (liveDirty) compare.
+uint32_t soundHash(const dsp::SynthParams& s, uint8_t tr, float td, uint8_t trb, float tdb) {
+    dsp::GenPatch g;
+    g.synth = s;
+    g.tiltRoute = tr;
+    g.tiltDepth = td;
+    g.tiltRouteB = trb;
+    g.tiltDepthB = tdb;
+    return dsp::patchHash(g);
+}
+
+// Hash of the live working sound right now.
+uint32_t liveHash() {
+    return soundHash(gCfg.synth, (uint8_t)gCfg.tiltRoute, gCfg.tiltDepth,
+                     (uint8_t)gCfg.tiltRouteB, gCfg.tiltDepthB);
+}
+
+// Re-cache the current slot's stored-sound hash (the saved reference for
+// liveDirty). One NVS read — call only when the reference actually changes
+// (slot load / save / clear / re-roll / boot), never per frame.
+void refreshCurSlotHash() {
+    PatchData pd;
+    loadPatchData(gCfg.currentPatch, pd);
+    gCurSlotHash = soundHash(pd.synth, pd.tiltRoute, pd.tiltDepth, pd.tiltRouteB, pd.tiltDepthB);
 }
 
 // Encode a PatchData and write it as the slot's override blob. Updates the
@@ -585,29 +622,21 @@ void begin() {
     gCfg.triggerDepth = clampT<int>(gPrefs.getInt("trigdep", (int)(d.triggerDepth * 100)), 0, 100) / 100.f;
     gCfg.triggerLatch = gPrefs.getBool("triglat", d.triggerLatch);
 
-    // Name the live working sound (status bar / Save default). If it matches the
-    // current slot's sound, show the slot's name — so factory GLIDE reads
-    // "GLIDE", not a content name; otherwise it's a persisted live edit and gets
-    // its own canonical name. Done once, here, after the live sound is loaded.
+    // Name the live working sound (status bar / Save default) and cache the
+    // current slot's reference hash for liveDirty(). If the persisted live sound
+    // matches the current slot's stored sound, show the slot's name (so factory
+    // GLIDE reads "GLIDE", not a content name) and start un-dirty; otherwise the
+    // player powered off mid-edit — keep the canonical name and the edit reads as
+    // unsaved (correctly). Done once, here, after the live sound is loaded.
     {
-        dsp::GenPatch lg;
-        lg.synth = gCfg.synth;
-        lg.tiltRoute = (uint8_t)gCfg.tiltRoute;
-        lg.tiltDepth = gCfg.tiltDepth;
-        lg.tiltRouteB = (uint8_t)gCfg.tiltRouteB;
-        lg.tiltDepthB = gCfg.tiltDepthB;
         PatchData sp;
         loadPatchData(gCfg.currentPatch, sp);
-        dsp::GenPatch sg;
-        sg.synth = sp.synth;
-        sg.tiltRoute = sp.tiltRoute;
-        sg.tiltDepth = sp.tiltDepth;
-        sg.tiltRouteB = sp.tiltRouteB;
-        sg.tiltDepthB = sp.tiltDepthB;
-        if (dsp::patchHash(lg) == dsp::patchHash(sg))
+        gCurSlotHash = soundHash(sp.synth, sp.tiltRoute, sp.tiltDepth, sp.tiltRouteB,
+                                 sp.tiltDepthB);
+        if (liveHash() == gCurSlotHash)
             setLiveName(patchName(gCfg.currentPatch));
         else
-            dsp::soundName(dsp::patchHash(lg), gLiveName, sizeof gLiveName);
+            dsp::soundName(liveHash(), gLiveName, sizeof gLiveName);
     }
 }
 
@@ -722,6 +751,8 @@ void applyPatch(int slot) {
     gCfg.currentPatch = (uint8_t)slot;
     setLiveName(patchName(slot));  // factory slots show their instrument name,
                                    // custom slots their stored/canonical name
+    gCurSlotHash = soundHash(pd.synth, pd.tiltRoute, pd.tiltDepth, pd.tiltRouteB,
+                             pd.tiltDepthB);  // just loaded -> live matches: not dirty
     markDirty();
 }
 
@@ -752,6 +783,7 @@ bool savePatch(int slot) {
         gOverrideMask |= (uint16_t)(1u << slot);
         gCfg.currentPatch = (uint8_t)slot;
         cacheSlotName(slot);  // the slot now reads as its own sound's name
+        gCurSlotHash = liveHash();  // live IS what we just saved -> no longer dirty
         markDirty();
     }
     return ok;
@@ -765,6 +797,9 @@ bool saveToSlot(int slot, const PatchData& pd) {
     if (slot < 0 || slot >= dsp::kPatchCount) return false;
     if (!writeOverride(slot, pd)) return false;  // encode + putBytes + set mask
     cacheSlotName(slot);                          // reads pd.name if present
+    if (slot == gCfg.currentPatch)                // the current slot's reference moved
+        gCurSlotHash = soundHash(pd.synth, pd.tiltRoute, pd.tiltDepth, pd.tiltRouteB,
+                                 pd.tiltDepthB);
     markDirty();
     return true;
 }
@@ -776,6 +811,7 @@ void clearOverride(int slot) {
     gPrefs.remove(key);
     gOverrideMask &= (uint16_t)~(1u << slot);
     cacheSlotName(slot);  // back to the factory instrument name
+    if (slot == gCfg.currentPatch) refreshCurSlotHash();  // reference reverted
 }
 
 const char* patchName(int slot) {
@@ -787,6 +823,15 @@ const char* patchName(int slot) {
 
 const char* liveName() {
     return gLiveName[0] ? gLiveName : patchName(gCfg.currentPatch);
+}
+
+// True iff the live sound has UNSAVED edits — it differs (by content hash) from
+// what's stored in the current slot. Cheap (no NVS): a live patchHash vs the
+// cached slot reference. Clears the moment you save onto the current slot or load
+// any slot; becomes true after a roll / mutate / undo. Volume and live tilt/bend
+// mods are ignored, so riding a knob never reads as unsaved.
+bool liveDirty() {
+    return liveHash() != gCurSlotHash;
 }
 
 // Recompute the live sound's name from its current contents (canonical adj-noun).

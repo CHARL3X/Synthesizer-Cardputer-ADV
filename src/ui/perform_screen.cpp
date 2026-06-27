@@ -163,9 +163,11 @@ void drawStatus(M5Canvas& c) {
     c.fillRect(0, 0, cfg::kScreenW, kStatusH, theme::kPanel);
     char buf[32];
     // the LIVE sound owns the wordmark spot — its name is exactly what Save
-    // writes (no second name). * = the current slot is your own override.
+    // writes (no second name). * = UNSAVED edits (the live sound differs from the
+    // current slot); it clears the moment you shift-save. (The "this slot is your
+    // own sound" badge lives in the fn+q..p slot list, not here.)
     snprintf(buf, sizeof buf, "%s%s", store::liveName(),
-             store::patchHasOverride(cf.currentPatch) ? "*" : "");
+             store::liveDirty() ? "*" : "");
     // truncate to fit the cramped slot before the scale readout (x56); the full
     // name always lives in the SD library / Save dialog
     while (buf[0] && c.textWidth(buf) > 50) buf[strlen(buf) - 1] = '\0';

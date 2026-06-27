@@ -130,6 +130,9 @@ bool patchHasOverride(int slot);
 const char* patchName(int slot);       // factory name
 const char* liveName();                // the live working sound's name — what the
                                        // status bar shows and Save-to-SD uses
+bool liveDirty();                      // true iff the live sound has unsaved edits
+                                       // (differs from the current slot's stored
+                                       // sound); clears on save/load (status-bar *)
 void refreshLiveName();                // recompute liveName() from the current synth
                                        // (for paths that bypass applyPatchData)
 bool saveToSlot(int slot, const PatchData& pd);  // write a patch (e.g. an SD-library

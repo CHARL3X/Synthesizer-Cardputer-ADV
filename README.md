@@ -80,30 +80,34 @@ it's already a tiny fretboard. So GLIDE treats it like one:
 
 ## The sounds
 
-Ten sounds on `fn`+`q`..`p`, each with its own tilt personality — but **not the
-same ten on every device.** Slot `q` is always **GLIDE** (the home/boot sound);
-slots `w`..`p` are **rolled unique to your unit at first boot**, from a seed only
-your device has. Two people holding the same Cardputer don't start from the same
-nine sounds. A `*` by a name means it's your own sound — made or saved — rather
-than the stock factory voice; *Sound reset* restores that slot's factory voice,
-and *Reset all sounds* brings the whole named factory bank back.
-
-The table below is that **named factory bank** — the "roots" you can always
-return to, and the character the engine ships with. Out of the box you'll be
-playing your device's own rolled variations of it; see *Your own sounds* below.
+Ten sounds on `fn`+`q`..`p`, each with its own tilt personality. Eight are a
+**curated starting bank** — hand-tuned voices, led by **GLIDE** on `q` (the
+home/boot sound) and **ACID** on `w`. The last two, `o` and `p`, are
+**generative**: rolled unique to your unit from a seed only your device has, so
+no two Cardputers even start from the same pair. A `*` in the `fn`+`q..p` slot
+list marks a slot that holds *your own* sound (not a stock voice); a `*` on the
+top status bar means the *live* sound has **unsaved edits** — shift-save to keep
+them. *Sound reset* restores a slot, *Reset all sounds* brings the whole bank back.
 
 | key | sound | character | tilt does |
 |-----|-------|-----------|-----------|
 | q | **GLIDE** | the signature dry saw — *literally the boot sound / engine default* | vibrato (roll: filter) |
-| w | **EPIANO** | mellow electric piano — triangle, soft tine ping, chorus + plate | filter (roll: wobble) |
-| e | **HARP** | bright plucked string, cascading dotted-8 delay into a hall | filter (roll: dynamics) |
-| r | **BASS** | saw + heavy sub, driven, snappy filter pluck — for sliding basslines | filter (roll: dynamics) |
-| t | **ACID** | resonant squelch — *lean into it, tilt is the wah* | filter (full) |
-| y | **PAD** | crisp animated PWM wash, always-gliding — solo a progression over it | filter (roll: swell) |
-| u | **LEAD** | driven, singing, always-gliding — dotted-8 in the pocket | vibrato (roll: filter) |
-| i | **ORGAN** | soulful tonewheel: drawbar body, percussion ping, Leslie + growl | volume swell (roll: Leslie) |
-| o | **BRASS** | bold synth-brass section, swells up into the blat | filter (roll: shake) |
-| p | **GLASS** | crystalline struck bell, long shimmering delay + hall | vibrato (roll: ring) |
+| w | **ACID** | resonant squelch — *lean into it, tilt is the wah* | filter (full) |
+| e | **Bass** | fat pulse bass — square sub for weight, driven, snappy filter pluck | filter (roll: vibrato) |
+| r | **Solo** | bright square lead, always-gliding, 1/8-triplet delay in the pocket | vibrato |
+| t | **Ethereal** | soft triangle pad, long glide, roomy hall — a bed to solo over | vibrato (roll: swell) |
+| y | **Fat Square** | punchy square, bright per-note filter bloom, attack knock | filter |
+| u | **Hollow** | driven square through a *notch* filter — phasey and hollow | volume swell (roll: filter) |
+| i | **Drift** | lush always-gliding square, deep chorus + a 1/8 delay | filter |
+| o | *generative* | rolled unique to your device — yours alone | (rolled) |
+| p | *generative* | rolled unique to your device — yours alone | (rolled) |
+
+But the bank is only the **starting point.** The soul of GLIDE is that you
+**make your own sounds** — roll a fresh patch, mutate it toward a vibe, keep the
+keepers — and grow an unlimited library that's recognisably yours. The eight
+curated voices above (the six after ACID are presets *designed on the device this
+way*) are just the roots; *Your own sounds*, below, is the actual point of the
+instrument.
 
 Under the hood these ride five engine additions: a paraphonic **filter
 envelope** (retriggered by fresh attacks, never by legato hand-offs — your
@@ -119,8 +123,8 @@ with `enter`, **never pitch bend** (nobody wants to lean the instrument
 over again). What's new:
 
 - **Per-sound personality**: every patch ships with its own route and depth
-  — ACID tilts into a full wah, ORGAN tilts into a swell pedal, LEAD and GLASS
-  tilt into vibrato. Saving a slot saves its tilt setup too.
+  — ACID tilts into a full wah, Hollow tilts into a volume swell, Ethereal and
+  Solo tilt into vibrato. Saving a slot saves its tilt setup too.
 - **Depth** (settings): how hard the motion drives the effect, 0–100%.
 - **Center calibration** (settings → *Tilt center*): "flat" becomes
   wherever *you* naturally hold the thing, not wherever gravity says.
@@ -176,8 +180,8 @@ replayed through the live engine:
 - The hint line at the bottom turns loop-aware while a take exists
   (`alt dub  hold undo  fn+alt clear`), so the gestures are always on screen.
 - Because the loop is events, it costs kilobytes — and, the good part, it
-  **plays through whatever sound is selected**. Record a BASS line,
-  switch to LEAD, solo over it; swap sounds mid-jam and the whole
+  **plays through whatever sound is selected**. Record a Bass line,
+  switch to Solo, solo over it; swap sounds mid-jam and the whole
   arrangement re-voices itself. Recorded slides, hammer-ons and octave
   sweeps replay as slides, hammer-ons and sweeps.
 - Loop playback is a protected backing layer like the drones: its voices
@@ -220,14 +224,14 @@ progression* (needs *Jam rows* on):
   instead.)
 - It's a protected backing layer like the drones and the loop: cap-exempt,
   steal-proof, ignores your bends and tilt vibrato, and **re-voices through
-  whatever sound you switch to** mid-jam. Lay down PAD, solo on LEAD.
+  whatever sound you switch to** mid-jam. Lay down Ethereal, solo on Solo.
 - The progression is on screen: a `PROG  A  D  E  ▸` strip across the top of
   the scope with the chord sounding now boxed, and its root outlined on the
   mini grid-map so you can watch the changes walk.
 - **bksp (panic)** clears the progression to start over — same gesture that
   clears the drones. Like them, it's performance state and never hits flash.
 
-Pick PAD, BRASS, or ORGAN for the bed, set a slow tempo, tap four chords,
+Pick Ethereal, Drift, or Hollow for the bed, set a slow tempo, tap four chords,
 and you've got a song to solo on in about ten seconds.
 
 ## Soloing over the jam: a separate register and sound
@@ -241,8 +245,8 @@ jam is running, the backing holds its ground:
   built in. Build a progression low, then solo two octaves up over it.
 - **Different sound.** Switch patches (`fn`+letter) over a running jam and the
   backing **freezes onto the sound it was playing** while the new patch becomes
-  your solo voice. Lay down a PAD progression, flip to LEAD, and wail over it —
-  the pad keeps padding. An amber **`LK`** by the octave readout (and a `SOLO`
+  your solo voice. Lay down an Ethereal progression, flip to Solo, and wail over
+  it — the pad keeps padding. An amber **`LK`** by the octave readout (and a `SOLO`
   flash on the switch) tells you the split is engaged.
 - **Their own voice, a shared room.** The backing and the solo each keep their
   own oscillator, filter, envelope and drive — but they wash into one shared
@@ -263,9 +267,9 @@ things make a solo over that backing sound *produced*:
   follows your hand — set the groove by feel, no number-nudging.
 - **Tempo-synced delay** (settings → *Delay sync*): lock the echo to a musical
   division — `1/4`, **`1/8.` (dotted eighth — the Edge/Gilmour trick)**, `1/8`,
-  `1/8T`, or `1/16` — and every repeat lands on the beat. LEAD, HARP and GLASS
-  ship with it on; switch to LEAD over a progression and the dotted-eighths
-  cascade right in the pocket. (Set it to `free` for a plain ms delay.) If a
+  `1/8T`, or `1/16` — and every repeat lands on the beat. Solo and Drift ship
+  with it on; switch to Solo over a progression and the repeats cascade right in
+  the pocket. (Set it to `free` for a plain ms delay.) If a
   division is too long for the delay line at a slow tempo it folds down an
   octave, so it stays on the grid instead of clipping.
 
@@ -336,9 +340,10 @@ action auditions on the spot (a short fixed lick, so you can A/B two rolls):
   survives firmware updates and travels card-to-card. (The instrument plays
   perfectly with no card in it — SD only *grows* the library past the ten slots.)
 
-And **Re-roll bank** is the big red button: nine brand-new slots from a fresh
-seed in one tap (`q` stays GLIDE). A whole new instrument when you want to start
-over. *Reset all sounds* is the way back to the named factory bank.
+And **Re-roll bank** resets the bank to its curated presets *and* rolls fresh
+randoms for your two generative slots (`o`, `p`) from a new seed — new sounds to
+discover whenever you want them, without losing the presets. *Reset all sounds*
+is the way back to the curated bank without changing the seed.
 
 > The seeded generator lives in `dsp/sound_gen` — pure, deterministic and
 > host-tested, the same as the synth voice. See
@@ -347,20 +352,20 @@ over. *Reset all sounds* is the way back to the named factory bank.
 
 ## The philosophy, encoded
 
-- **One device, your sound — literally, from first boot.** Everyone who buys a
-  Cardputer holds the same 56 keys and the same one-watt speaker, so the engine
-  was built deep enough that no two players' instruments need sound alike: a
-  modulation matrix (two LFOs, a second envelope, tilt and per-note random as
-  sources, routable to pitch, filter, amp, drive and the FX), a multimode filter,
-  and a full send-FX rack. But depth you *could* reach isn't the same as a device
-  that's *already* yours — so the instrument now seeds its own bank. Every unit
-  rolls its nine non-anchor slots from a seed only it has; two people unboxing the
-  same hardware don't even start from the same sounds. From there the randomizer
-  is the instrument: **roll** a new patch, **mutate** toward a vibe, **undo** back
-  to the one you liked, **keep** it on a slot or to an unlimited SD library named
-  in your own words. Owning one was never meant to mean sounding like everyone
-  else who owns one — and now it doesn't, by default. Thanks to the tagged patch
-  format, none of it is ever wiped by a future update.
+- **One device, your sound.** Everyone who buys a Cardputer holds the same 56
+  keys and the same one-watt speaker, so the engine was built deep enough that no
+  two players' instruments need sound alike: a modulation matrix (two LFOs, a
+  second envelope, tilt and per-note random as sources, routable to pitch, filter,
+  amp, drive and the FX), a multimode filter, and a full send-FX rack. The
+  instrument *ships sounding good* — a curated bank of hand-tuned voices, ready to
+  play — but it's built to *become yours*, and that's the real product. The
+  generative engine is the heart of it: **roll** a new patch, **mutate** toward a
+  vibe, **undo** back to the one you liked, **keep** it on a slot or in an
+  unlimited SD library named in your own words. Two of your ten slots are
+  generative from first boot — rolled from a seed only your device has, so no two
+  units even start alike — and you can roll fresh ones any time. Owning one was
+  never meant to mean sounding like everyone else who owns one. Thanks to the
+  tagged patch format, none of what you make is ever wiped by a future update.
 - **The skill gap is the product.** Basic play takes minutes (scale lock +
   degree mapping = first session sounds good). Mastery — clean legato
   overlaps, accurate shape re-fingering, controlled bends into chromatic
@@ -495,7 +500,7 @@ firmware never touches raw I2S and why the library versions are pinned.
 | jam tempo / chord length | 40–240 bpm / 1–8 beats | 100 / 4 | settings |
 | octave keys | sweep (glide) / re-strike | sweep | settings |
 | trigger action / depth / mode | muffle, brighten, pitch dive, drive grit / 0–100% / momentary, latch | muffle / 70% / momentary | settings (G0 button) |
-| sound slots | 10 (q=GLIDE anchor, w..p rolled unique per device) | per device | fn+q..p, fn+shift+q..p |
+| sound slots | 10 (q=GLIDE, w=ACID, e..i curated presets, o/p generative per device) | curated + 2 rolled | fn+q..p, fn+shift+q..p |
 | generate | randomize / mutate (+amount) / undo-redo / init / re-roll bank | — | settings (SOUND) |
 | SD library | save / load / delete named .gpat patches (unlimited) | — | settings (SOUND), browser |
 | filter env (atk/dec/depth) | 1ms–2s / 10ms–2s / 0–3+ oct | per sound | settings*/saved in sound |
