@@ -7,6 +7,7 @@
 #include "../dsp/params.h"
 #include "../dsp/patches.h"
 #include "../dsp/pitch.h"
+#include "../dsp/sound_gen.h"
 
 namespace store {
 
@@ -126,5 +127,31 @@ bool backingLocked();
 void clearOverride(int slot);          // back to factory
 bool patchHasOverride(int slot);
 const char* patchName(int slot);       // factory name
+
+// ---- generative sound: "your instrument is yours" -----------------------
+// Every unit gets a stable, unique seed at first boot. On a FRESH device the
+// nine non-anchor slots (w..p) are filled with random patches rolled from that
+// seed, so no two players' instruments sound alike out of the box; slot 0 (q)
+// stays GLIDE as the home/boot anchor. Existing devices are never touched
+// automatically — they opt in via reRollBank().
+uint32_t deviceSeed();                 // this unit's stable unique seed
+void reRollBank();                     // a whole new instrument: regenerate w..p
+                                       // from a fresh seed (q stays GLIDE), then
+                                       // reload the current slot live
+void applyGenerated(const dsp::GenPatch& g);  // load a rolled/mutated sound ->
+                                       // live working sound (keeps master vol;
+                                       // not a slot until you save it)
+
+// ---- non-destructive live-sound history (RAM only; never persisted) -----
+// Roll / Mutate / Init checkpoint the live sound first, so a player can always
+// step back to a sound they liked instead of losing it to an eager re-roll.
+// This is the "test without trashing" guarantee. Session/performance state,
+// like the loop pedal — it does not survive a reboot.
+void historyCheckpoint();              // snapshot the current live sound+tilt
+bool historyUndo();                    // restore the previous snapshot. false if none
+bool historyRedo();                    // re-apply a stepped-back snapshot. false if none
+bool historyCanUndo();
+bool historyCanRedo();
+int  historyUndoDepth();               // how many steps back are available (HUD)
 
 }  // namespace store

@@ -1,6 +1,7 @@
 #include "glide_config.h"
 
 #include <Preferences.h>
+#include <esp_random.h>
 #include <nvs_flash.h>
 
 #include "../config.h"
@@ -20,6 +21,18 @@ bool gDirty = false;
 uint32_t gDirtySince = 0;
 uint16_t gOverrideMask = 0;  // cached per-slot override flags — the UI asks
                              // every frame; NVS must not be in that path
+uint32_t gSeed = 0;          // this unit's stable unique seed (persisted)
+
+// ---- non-destructive live-sound history (RAM only) ------------------------
+// A two-stack undo/redo over the live working sound. checkpoint() pushes the
+// current sound onto the undo stack (and drops any redo tail); undo/redo swap
+// the live sound between the stacks. Capped — the oldest entry is dropped when
+// full. Never persisted (performance state, like the loop pedal).
+constexpr int kHist = 16;
+PatchData gUndo[kHist];
+PatchData gRedo[kHist];
+int gUndoLen = 0;
+int gRedoLen = 0;
 
 template <typename T>
 T clampT(T v, T lo, T hi) {
@@ -150,6 +163,59 @@ void applyPatchData(const PatchData& pd) {
     gCfg.synth.voiceCount =
         (uint8_t)clampT<int>(gCfg.synth.voiceCount, 1, dsp::kMaxVoices);  // blob hygiene
 }
+
+// Map a pure-dsp GenPatch onto a storage PatchData (the dsp/storage seam).
+void genToPatchData(const dsp::GenPatch& g, PatchData& pd) {
+    pd.synth = g.synth;
+    pd.tiltRoute = g.tiltRoute;
+    pd.tiltDepth = g.tiltDepth;
+    pd.tiltRouteB = g.tiltRouteB;
+    pd.tiltDepthB = g.tiltDepthB;
+}
+
+// Per-slot generation seed: the device seed scrambled by the slot index, so a
+// unit's nine generated slots are all different yet reproducible from its seed.
+uint32_t slotSeed(uint32_t seed, int slot) {
+    return seed ^ (0x9E3779B9u * (uint32_t)(slot + 1));
+}
+
+// Encode a PatchData and write it as the slot's override blob. Updates the
+// cached mask on success. NVS-full safe: a failed putBytes leaves the slot
+// untouched and the mask bit unchanged.
+bool writeOverride(int slot, const PatchData& pd) {
+    uint8_t buf[512];
+    const size_t n = encodePatch(pd, buf, sizeof buf);
+    if (n == 0) return false;
+    char key[3];
+    patchKey(slot, key);
+    if (gPrefs.putBytes(key, buf, n) != n) return false;
+    gOverrideMask |= (uint16_t)(1u << slot);
+    return true;
+}
+
+// Snapshot the live working sound (sound + tilt personality) into a PatchData.
+// Live-mod fields are neutralised so a restore is a clean sound, not a frozen
+// bend/tilt frame (applyPatchData neutralises them again on the way back too).
+void snapshotLive(PatchData& pd) {
+    pd.synth = gCfg.synth;
+    pd.synth.bendCents = 0.f;
+    pd.synth.vibratoCents = 0.f;
+    pd.synth.cutoffModOct = 0.f;
+    pd.synth.volMod = 1.f;
+    pd.tiltRoute = (uint8_t)gCfg.tiltRoute;
+    pd.tiltDepth = gCfg.tiltDepth;
+    pd.tiltRouteB = (uint8_t)gCfg.tiltRouteB;
+    pd.tiltDepthB = gCfg.tiltDepthB;
+}
+
+// Push onto a capped stack; drop the oldest if full (shift down by one).
+void histPush(PatchData* stack, int& len, const PatchData& pd) {
+    if (len >= kHist) {
+        for (int i = 1; i < kHist; ++i) stack[i - 1] = stack[i];
+        len = kHist - 1;
+    }
+    stack[len++] = pd;
+}
 }  // namespace
 
 GlideConfig& get() {
@@ -199,6 +265,19 @@ void begin() {
                   gBootCount, prevBoot, (unsigned)wrote, readBack,
                   gWriteProbeOk ? "ok" : "FAIL");
 
+    // This unit's stable unique seed. Created once from the hardware RNG and
+    // persisted; it's what makes one device's generated bank reproducibly
+    // different from the next. esp_random() is a true HRNG once the radio/clock
+    // is up (it is, by the time storage starts).
+    gSeed = gPrefs.getUInt("seed", 0);
+    if (gSeed == 0) {
+        gSeed = esp_random();
+        if (gSeed == 0) gSeed = 0x9E3779B9u;  // vanishingly unlikely, but never 0
+        if (gNvsOk) gPrefs.putUInt("seed", gSeed);
+        Serial.printf("[glide] new device seed %08x\n", gSeed);
+    }
+    const bool freshDevice = (prevBoot == 0);  // truly first boot (or wiped NVS)
+
     GlideConfig d;  // defaults
 
     // scan override slots once; afterwards patchHasOverride is a bit test.
@@ -227,6 +306,30 @@ void begin() {
             if (n == 0 || gPrefs.putBytes(key, buf, n) != n) allOk = false;
         }
         if (allOk) gPrefs.putBool("tlv1", true);
+    }
+
+    // First-boot unique bank. On a FRESH device, fill the nine non-anchor slots
+    // (w..p) with patches rolled from this unit's seed, so the instrument is
+    // already nobody else's the moment you press fn+w. Slot 0 (q) is left as the
+    // GLIDE factory anchor — the boot/home sound never changes under you, and a
+    // brand-new device still powers straight into the signature tone.
+    //
+    // Guards (Hard Rule #3 — never wipe a save): runs once (the "bankgen"
+    // sentinel), only on a fresh NVS (prevBoot == 0), and skips any slot that
+    // already carries an override. An existing device updating to this firmware
+    // keeps its factory bank and every saved sound untouched — it opts into the
+    // generative world deliberately, via settings -> Re-roll bank.
+    if (gNvsOk && !gPrefs.getBool("bankgen", false)) {
+        if (freshDevice) {
+            for (int i = 1; i < dsp::kPatchCount; ++i) {
+                if ((gOverrideMask >> i) & 1u) continue;  // never clobber a save
+                PatchData pd;
+                genToPatchData(dsp::generateSound(slotSeed(gSeed, i)), pd);
+                if (writeOverride(i, pd))
+                    Serial.printf("[glide] seeded slot %d from %08x\n", i, gSeed);
+            }
+        }
+        gPrefs.putBool("bankgen", true);  // even on an existing device: mark done
     }
 
     auto& s = gCfg.synth;
@@ -547,6 +650,68 @@ const char* patchName(int slot) {
     if (slot < 0 || slot >= dsp::kPatchCount) return "?";
     return dsp::factoryPatches()[slot].name;
 }
+
+// ---- generative sound -------------------------------------------------------
+uint32_t deviceSeed() { return gSeed; }
+
+void applyGenerated(const dsp::GenPatch& g) {
+    PatchData pd;
+    genToPatchData(g, pd);
+    applyPatchData(pd);  // keeps master vol, neutralises live-mods, clamps voices
+    markDirty();         // the live sound changed — persist the flat keys
+}
+
+void reRollBank() {
+    // A whole new instrument. Roll a fresh seed so this is genuinely different
+    // from last time (not a repeat of the boot bank), then regenerate every
+    // non-anchor slot. Slot 0 (q) is reset to the pure GLIDE factory anchor so
+    // "q is home" always holds. Deliberately destructive — like Reset all
+    // sounds, it's a choice the player makes, not something that happens to them.
+    gSeed = esp_random();
+    if (gSeed == 0) gSeed = 0x9E3779B9u;
+    if (gNvsOk) gPrefs.putUInt("seed", gSeed);
+    clearOverride(0);  // q back to factory GLIDE
+    for (int i = 1; i < dsp::kPatchCount; ++i) {
+        PatchData pd;
+        genToPatchData(dsp::generateSound(slotSeed(gSeed, i)), pd);
+        writeOverride(i, pd);
+    }
+    applyPatch(gCfg.currentPatch);  // reload whatever slot is current, live
+}
+
+// ---- non-destructive live-sound history ------------------------------------
+void historyCheckpoint() {
+    PatchData pd;
+    snapshotLive(pd);
+    histPush(gUndo, gUndoLen, pd);
+    gRedoLen = 0;  // a new branch drops any redo tail
+}
+
+bool historyUndo() {
+    if (gUndoLen == 0) return false;
+    PatchData cur;
+    snapshotLive(cur);
+    histPush(gRedo, gRedoLen, cur);   // current becomes redoable
+    const PatchData prev = gUndo[--gUndoLen];
+    applyPatchData(prev);
+    markDirty();
+    return true;
+}
+
+bool historyRedo() {
+    if (gRedoLen == 0) return false;
+    PatchData cur;
+    snapshotLive(cur);
+    histPush(gUndo, gUndoLen, cur);
+    const PatchData next = gRedo[--gRedoLen];
+    applyPatchData(next);
+    markDirty();
+    return true;
+}
+
+bool historyCanUndo() { return gUndoLen > 0; }
+bool historyCanRedo() { return gRedoLen > 0; }
+int  historyUndoDepth() { return gUndoLen; }
 
 // ---- solo/backing split -----------------------------------------------------
 void lockBacking() {
