@@ -1,7 +1,11 @@
+<p align="center">
+  <img src="assets/glide-logo.png" alt="GLIDE" width="440">
+</p>
+
 # GLIDE
 
 **A continuous-pitch polyphonic slide instrument that lives in your pocket.**
-Firmware for the M5Stack Cardputer ADV.
+Firmware for the M5Stack Cardputer ADV — by **[CHARL3X](https://github.com/CHARL3X)**.
 
 This is the second incarnation of the instrument from the brainstorm — the
 "pitch touch bar," the "digital slide whistle," STRATA-1's little sibling.

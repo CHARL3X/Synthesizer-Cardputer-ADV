@@ -15,6 +15,15 @@ bool run() {
     auto& d = M5Cardputer.Display;
     d.fillScreen(theme::kBg);
 
+    // Builder credit, dim, in the clear band below the centred logo. Drawn once
+    // here: the logo sprite blits only over its own rect each frame, so this
+    // never gets painted over and stays for the whole splash.
+    d.setTextDatum(bottom_center);
+    d.setFont(&fonts::Font0);
+    d.setTextColor(theme::kDim, theme::kBg);
+    d.drawString("by CHARL3X  -  github.com/CHARL3X", cfg::kScreenW / 2, cfg::kScreenH - 1);
+    d.setTextDatum(top_left);
+
     // The synthwave wordmark, centered, animated. Each frame is decoded into a
     // reused sprite (drawPng) then blitted — one 230x115 sprite, not four, so
     // the RAM cost is fixed regardless of frame count. White line-art on black
