@@ -5,7 +5,7 @@
 # GLIDE
 
 **A pocket synth that slides between every note, and builds its own sounds.**
-Firmware for the M5Stack Cardputer ADV. By **[CHARL3X](https://github.com/CHARL3X)**.
+Firmware for the M5Stack Cardputer, original (v1.1) and ADV. By **[CHARL3X](https://github.com/CHARL3X)**.
 
 ### ▶️ See it in action
 
