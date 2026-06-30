@@ -43,6 +43,7 @@ const Line kLines[] = {
     {"PLAY KEYS", true},
     {"shift (hold): chromatic (off-scale)", false},
     {"'        : scale lock on/off", false},
+    {"fn+k     : cycle key up (match a song)", false},
     {"- / =    : octave down / up", false},
     {"[ / ]    : pitch bend down / up", false},
     {"\\        : hold (sustain, hands free)", false},

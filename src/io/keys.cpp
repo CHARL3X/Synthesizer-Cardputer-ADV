@@ -31,6 +31,7 @@ constexpr int kKeyBendUp = 26;     // ]
 constexpr int kKeyHold = 27;       // backslash
 constexpr int kKeyFn = 28;         // fn
 constexpr int kKeyShift = 29;      // shift
+constexpr int kKeyKeyCycle = 37;   // k — fn+K cycles the root key (live retune)
 constexpr int kKeyScaleLock = 40;  // '
 constexpr int kKeyTilt = 41;       // enter
 constexpr int kKeyCtrl = 42;       // ctrl  (octave down, left thumb)
@@ -486,6 +487,16 @@ void adjustVolume(int dir) {
     hud::show(g.backingLocked ? "SOLO VOL" : "VOLUME", v, g.synth.masterVol);
 }
 
+// fn+K: walk the root key up a semitone, wrapping B->C. Built for the audition
+// loop — step the key, play a phrase against a song, clash, step again — with no
+// trip to settings. Held notes keep their pitch; new notes play in the new key.
+void cycleRootKey() {
+    auto& g = store::get();
+    g.layout.rootSemis = (uint8_t)((g.layout.rootSemis + 1) % 12);
+    store::markDirty();
+    hud::show("KEY", dsp::kNoteNames[g.layout.rootSemis], -1.f);
+}
+
 // ---- tilt mode cycle --------------------------------------------------------
 // enter short-tap: off -> single (axis A) -> dual (A + roll B) -> off. Entering
 // an active state self-heals a missing route/depth so it's never a dead toggle.
@@ -852,6 +863,10 @@ Actions poll(uint32_t nowMs) {
 
         if (gGridString[cd] >= 0) {
             if (gQuickEdit) {
+                if (cd == kKeyKeyCycle) {  // fn+K = retune the root key (live)
+                    cycleRootKey();
+                    continue;
+                }
                 if (gGridString[cd] == 3) {
                     // top row selects the quick-edit parameter
                     gQuickParam = gGridCol[cd];
