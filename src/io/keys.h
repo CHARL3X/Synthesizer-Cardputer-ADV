@@ -50,6 +50,7 @@ bool triggerHeld();  // raw G0 boot-button level (the assignable trigger macro)
 bool progActive();
 int progLen();
 int progIndex();
+bool progAppendStep(int string, int col, bool chrom);  // demo mode spells a bed
 void progStepName(int i, char* out, int cap);
 bool progCurrentCell(int& string, int& col);
 

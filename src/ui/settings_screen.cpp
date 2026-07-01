@@ -11,6 +11,7 @@
 #include "../dsp/scales.h"
 #include "../dsp/sound_gen.h"
 #include "../io/audio_engine.h"
+#include "../io/demo.h"
 #include "../io/keys.h"
 #include "../io/looper.h"
 #include "../io/sd_store.h"
@@ -437,6 +438,11 @@ MOD_SLOT_THUNKS(5)
 void fHelp(char* o, int c) { snprintf(o, c, "open ->"); }
 void aHelp(int) { gOpenHelp = true; }  // run() does the actual modal open
 
+// Demo mode: settings just arms it; run() exits and the perform loop starts it
+// (the demo plays on the perform screen, where the scope and trail can dance).
+void fDemo(char* o, int c) { snprintf(o, c, "play itself%c", kLRtag); }
+void aDemo(int) { demo::requestStart(); }
+
 // ---- value gauges: 0..1 fills for the continuous sound rows ---------------
 // (same mixer-strip idea as the quick-edit layer, so a page of numbers reads
 // at a glance; ranges mirror each row's adjust clamp)
@@ -727,6 +733,7 @@ const Item kItems[] = {
     {"Trigger depth", fTrigDepth, aTrigDepth, true, gTrigDep},
     {"Trigger mode", fTrigMode, aTrigMode},
     {"SYSTEM", nullptr, nullptr},
+    {"Demo mode", fDemo, aDemo},
     {"Display", fScopeMode, aScopeMode},
     {"Boot sound", fBoot, aBoot},
     {"Intro card", fIntro, aIntro},
@@ -1118,6 +1125,8 @@ void run(M5Canvas& canvas) {
             store::persistNow();
             audio::setParams(g.synth, g.backingLocked ? g.backingSynth : g.synth);
         };
+
+        if (demo::pending()) break;  // Demo mode fired: hand off to the perform loop
 
         if (isHeader(sel)) {
             // fold / unfold the section: enter toggles, ► opens, ◄ closes.

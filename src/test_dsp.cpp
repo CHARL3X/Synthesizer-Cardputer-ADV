@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "dsp/demo_gen.h"
 #include "dsp/morph.h"
 #include "dsp/patches.h"
 #include "dsp/pitch.h"
@@ -790,6 +791,39 @@ int main() {
         SynthParams a2 = a;
         a2.bendCents = 123.f;
         CHECK(morphParams(a2, b, 1.f).bendCents == 123.f, "live-mod fields stay the caller's");
+    }
+
+    // ---- demo melody generator: seeded, bounded, musical --------------------
+    {
+        DemoMelody m1, m2;
+        m1.seed(42);
+        m2.seed(42);
+        int slides = 0, attacks = 0, rests = 0;
+        bool inRange = true, durOk = true, sameSeq = true;
+        for (int i = 0; i < 300; ++i) {
+            const DemoNote a = m1.next(5);  // pentatonic-sized scale
+            const DemoNote b = m2.next(5);
+            sameSeq = sameSeq && a.type == b.type && a.degree == b.degree &&
+                      a.beats4 == b.beats4;
+            inRange = inRange && a.degree >= 0 && a.degree <= 10;
+            durOk = durOk && a.beats4 >= 1 && a.beats4 <= 8;
+            if (a.type == DemoNote::Slide) ++slides;
+            else if (a.type == DemoNote::Attack) ++attacks;
+            else ++rests;
+        }
+        CHECK(sameSeq, "demo melody is deterministic per seed");
+        CHECK(inRange, "demo degrees stay inside two octaves");
+        CHECK(durOk, "demo durations are 1..8 quarter-beats");
+        CHECK(slides > 30, "the demo actually slides (glide on display)");
+        CHECK(rests > 10 && attacks > 30, "phrases breathe and re-attack");
+        DemoMelody m3;
+        m3.seed(7);
+        bool ok7 = true;  // a 7-note scale widens the range accordingly
+        for (int i = 0; i < 300; ++i) {
+            const DemoNote a = m3.next(7);
+            ok7 = ok7 && a.degree >= 0 && a.degree <= 14;
+        }
+        CHECK(ok7, "range follows the scale length");
     }
 
     if (failures == 0) {

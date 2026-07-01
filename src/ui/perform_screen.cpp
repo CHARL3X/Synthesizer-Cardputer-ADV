@@ -10,6 +10,7 @@
 #include "../dsp/pitch.h"
 #include "../dsp/scales.h"
 #include "../io/audio_engine.h"
+#include "../io/demo.h"
 #include "../io/keys.h"
 #include "../io/led.h"
 #include "../io/looper.h"
@@ -715,6 +716,11 @@ void drawHint(M5Canvas& c) {
         c.drawString("release fn to play", 4, kHintY);
         return;
     }
+    if (demo::active()) {
+        c.setTextColor(theme::kAmber, theme::kBg);
+        c.drawString("playing itself - any key takes over", 2, kHintY);
+        return;
+    }
     // the hint line turns loop-aware while a take exists — the gestures live
     // on screen exactly when they're relevant (no more hunting for clear)
     const looper::State ls = looper::state();
@@ -789,6 +795,9 @@ void run() {
 
         keys::Actions act = keys::poll(frameStart);
         looper::tick(frameStart);  // schedule due loop-playback events
+        if (demo::pending()) demo::start(frameStart);  // armed from settings
+        if (demo::active() && act.gridPressed) demo::stop();  // the takeover
+        demo::tick(frameStart);
         if (act.gridPressed) soundcard::dismiss();  // playing reclaims the scope
 
         if (act.exitApp) {
@@ -799,6 +808,7 @@ void run() {
             ESP.restart();
         }
         if (act.openSettings) {
+            demo::stop();  // the bed survives; the melody yields to the menus
             settings::run(canvas);
             keys::resync();
             gPrevValid = false;
@@ -867,6 +877,14 @@ void run() {
         soundcard::draw(canvas, frameStart);  // under the HUD: fresh feedback wins
         hud::draw(canvas, frameStart);
         if (!cf.seenIntro) drawIntro(canvas);
+        if (demo::active() && morph::pos() < 0.02f && ((frameStart >> 9) & 1) &&
+            !keys::quickEditActive()) {  // blinking DEMO badge (yields to the strip)
+            canvas.setFont(&fonts::Font0);
+            canvas.setTextColor(theme::kAmber, theme::kBg);
+            canvas.setTextDatum(top_center);
+            canvas.drawString("DEMO", cfg::kScreenW / 2, kScopeY + 4);
+            canvas.setTextDatum(top_left);
+        }
         if (trigEngaged && !trigMorph) {  // G0 macro engaged — name the action
                                           // (Morph draws its own strip instead)
             char tb[12];

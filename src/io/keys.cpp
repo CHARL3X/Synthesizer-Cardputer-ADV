@@ -231,6 +231,22 @@ void restrikeDrone(int cd);
 void clearProg();      // defined with the progression engine, used by panic()
 bool backingActive();  // any backing layer alive (drones / loop / progression)
 
+// Append a chord step to the progression (the jam-row tap and demo mode share
+// this). Arms the beat clock and freezes the key/register on the first step.
+bool progAppend(int string, int col, bool chrom) {
+    if (gProgLen >= kMaxProgSteps) return false;
+    gProg[gProgLen].string = (int8_t)string;
+    gProg[gProgLen].col = (int8_t)col;
+    gProg[gProgLen].chrom = chrom;
+    ++gProgLen;
+    if (gProgLen == 1) {
+        gProgIdx = 0;
+        gProgLastAdv = 0;                  // arm the clock
+        gProgLayout = store::get().layout; // freeze the key/register here
+    }
+    return true;
+}
+
 void notePress(int cd, bool shiftHeld) {
     auto& cfgr = store::get();
     HeldNote& n = gNotes[cd];
@@ -240,16 +256,10 @@ void notePress(int cd, bool shiftHeld) {
         // progression mode: a jam-row tap APPENDS a chord step (no timing,
         // repeats allowed) — spell the loop, then solo on the rows above.
         if (cfgr.jamMotion == kJamProg) {
-            if (gProgLen >= kMaxProgSteps) { hud::showError("PROG", "full (16)"); return; }
             const bool chrom = shiftHeld || !cfgr.layout.scaleLock;
-            gProg[gProgLen].string = gGridString[cd];
-            gProg[gProgLen].col = gGridCol[cd];
-            gProg[gProgLen].chrom = chrom;
-            ++gProgLen;
-            if (gProgLen == 1) {
-                gProgIdx = 0;
-                gProgLastAdv = 0;            // arm the clock
-                gProgLayout = cfgr.layout;   // freeze the key/register here
+            if (!progAppend(gGridString[cd], gGridCol[cd], chrom)) {
+                hud::showError("PROG", "full (16)");
+                return;
             }
             float pp[kProgVoices];
             dsp::chordPitches(gProgLayout, gGridString[cd], gGridCol[cd], chrom, pp, kProgVoices);
@@ -1191,6 +1201,7 @@ bool progActive() {
 }
 int progLen() { return gProgLen; }
 int progIndex() { return gProgLen ? gProgIdx : -1; }
+bool progAppendStep(int string, int col, bool chrom) { return progAppend(string, col, chrom); }
 
 void progStepName(int i, char* out, int cap) {
     if (cap <= 0) return;
