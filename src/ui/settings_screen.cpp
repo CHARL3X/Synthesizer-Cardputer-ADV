@@ -19,6 +19,7 @@
 #include "audition.h"
 #include "help.h"
 #include "sd_browser.h"
+#include "sound_card.h"
 #include "theme.h"
 
 namespace settings {
@@ -452,6 +453,7 @@ void aInitSound(int) {
     g.synth.masterVol = vol;
     store::refreshLiveName();                  // the blank sound gets its own name
     pushLiveSound();
+    soundcard::show();                         // the blank face, seen
 }
 
 // THE button. Roll a whole new patch from a fresh hardware-random seed, land it
@@ -463,6 +465,7 @@ void aRandomize(int) {
     keys::soundSwitchBegin();  // over a jam: freeze the backing so the roll is solo-only
     store::applyGenerated(dsp::generateSound(esp_random()));
     audition::start();
+    soundcard::show();  // see the roll while you hear it
 }
 
 // Evolve the CURRENT sound instead of rolling fresh — sculpt toward a vibe. The
@@ -473,6 +476,7 @@ void aMutate(int) {
     keys::soundSwitchBegin();  // over a jam: evolve the SOLO, the backing holds
     store::applyGenerated(dsp::mutateSound(liveAsGen(), gMutateAmt, esp_random()));
     audition::start();
+    soundcard::show();
 }
 
 void fMutAmt(char* o, int c) { snprintf(o, c, "%d %%", (int)(gMutateAmt * 100 + 0.5f)); }
@@ -489,6 +493,7 @@ void aUndo(int) {
     keys::soundSwitchBegin();  // undo/redo move the solo only; the backing holds
     store::historyUndo();
     audition::start();
+    soundcard::show();
 }
 void fRedo(char* o, int c) {
     if (store::historyCanRedo()) snprintf(o, c, "step forward%c", kLRtag);
@@ -499,6 +504,7 @@ void aRedo(int) {
     keys::soundSwitchBegin();
     store::historyRedo();
     audition::start();
+    soundcard::show();
 }
 
 // Save the live sound to the SD library under an auto-generated, evocative name
@@ -577,6 +583,7 @@ void aReRoll(int) {
         store::historyCheckpoint();  // the live sound stays recoverable via Undo
         store::reRollBank();         // ...the slots do not — hence the confirm
         audition::start();
+        soundcard::show();
     } else {
         gReRollArmed = true;         // first tap arms; second within 3s confirms
         gReRollArmedAt = millis();
@@ -933,6 +940,7 @@ void draw(M5Canvas& c, int sel, int top) {
     c.drawString(isHeader(sel) ? "\x1e\x1f move  enter folds  fn jump  ` back"
                                : "\x1e\x1f move  \x11\x10 change  fn jump  ` back",
                  4, 125);
+    soundcard::draw(c, millis());  // a fresh roll's face rides over the list
     c.pushSprite(0, 0);
 }
 
@@ -989,6 +997,7 @@ void run(M5Canvas& canvas) {
             sel = step(sel, +1); navLast = now;
         }
         if (!(held(kUp) || held(kDown)) || fnHeld) navRep = 0;  // released -> disarm
+        if (hit(kUp) || hit(kDown)) soundcard::dismiss();  // moving on reclaims the list
 
         // --- adjust: ,// change; hold repeats only on `repeatable` numeric rows.
         // enter is handled separately (activate an item / fold a header / roll the
@@ -1027,6 +1036,7 @@ void run(M5Canvas& canvas) {
                 audio::setParams(g.synth, g.backingLocked ? g.backingSynth : g.synth);
                 store::persistNow();
                 audition::start();  // audition the loaded sound on return
+                soundcard::show();
             }
             draw(canvas, sel, top);
             continue;

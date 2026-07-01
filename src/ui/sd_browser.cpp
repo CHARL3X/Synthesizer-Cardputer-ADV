@@ -10,6 +10,7 @@
 #include "../io/sd_store.h"
 #include "../storage/glide_config.h"
 #include "audition.h"
+#include "sound_card.h"
 #include "text_entry.h"
 #include "theme.h"
 
@@ -91,8 +92,8 @@ bool run(M5Canvas& canvas, char* loadedName, int cap) {
                 return false;
             }
             if (haveList) {
-                if (hit(kUp)) { sel = (sel - 1 + gCount) % gCount; }
-                if (hit(kDown)) { sel = (sel + 1) % gCount; }
+                if (hit(kUp)) { sel = (sel - 1 + gCount) % gCount; soundcard::dismiss(); }
+                if (hit(kDown)) { sel = (sel + 1) % gCount; soundcard::dismiss(); }
                 if (hit(kPreview)) {
                     store::PatchData pd;
                     if (loadFile(gNames[sel], pd)) {
@@ -104,6 +105,7 @@ bool run(M5Canvas& canvas, char* loadedName, int cap) {
                         store::applyStoredPatch(pd);
                         keys::soundSwitchEnd();
                         audition::start();
+                        soundcard::show();  // the previewed sound's face, over the list
                     }
                 }
                 if (hit(kEnter)) { mode = Mode::Sheet; sheetSel = 0; deleteArmed = false; }
@@ -305,6 +307,7 @@ bool run(M5Canvas& canvas, char* loadedName, int cap) {
                 canvas.setTextColor(theme::kDim, theme::kPanel);
                 canvas.drawString("\x1e\x1f pick  enter ok  ` back", px + 8, py + ph - 11);
             }
+            if (mode == Mode::List) soundcard::draw(canvas, now);  // preview's face
         }
 
         canvas.pushSprite(0, 0);

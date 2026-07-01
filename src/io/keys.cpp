@@ -10,6 +10,7 @@
 #include "../dsp/scales.h"
 #include "../storage/glide_config.h"
 #include "../ui/hud.h"
+#include "../ui/sound_card.h"
 #include "audio_engine.h"
 #include "looper.h"
 
@@ -889,10 +890,10 @@ Actions poll(uint32_t nowMs) {
                         soundSwitchBegin();
                         store::applyPatch(slot);
                         soundSwitchEnd();
-                        auto& g = store::get();
-                        snprintf(v, sizeof v, "%s%s", store::patchName(slot),
-                                 store::patchHasOverride(slot) ? "*" : "");
-                        hud::show(g.backingLocked ? "SOLO" : "SOUND", v, (slot + 1) / 10.f);
+                        // the identity card replaces the plain name flash — the
+                        // sound you just summoned gets a face (it carries its
+                        // own SOLO tag when the backing is locked)
+                        soundcard::show();
                     }
                 }
                 continue;  // grid is muted while editing

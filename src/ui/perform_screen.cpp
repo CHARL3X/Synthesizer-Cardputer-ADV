@@ -16,6 +16,7 @@
 #include "../storage/glide_config.h"
 #include "hud.h"
 #include "settings_screen.h"
+#include "sound_card.h"
 #include "theme.h"
 
 namespace perform {
@@ -734,6 +735,7 @@ void run() {
 
         keys::Actions act = keys::poll(frameStart);
         looper::tick(frameStart);  // schedule due loop-playback events
+        if (act.gridPressed) soundcard::dismiss();  // playing reclaims the scope
 
         if (act.exitApp) {
             audio::pushEvent(dsp::NoteEvent::make(dsp::NoteEvent::AllOff, 0));
@@ -797,6 +799,7 @@ void run() {
         drawBattery(canvas, frameStart);
         drawBottom(canvas, frameStart);
         drawHint(canvas);
+        soundcard::draw(canvas, frameStart);  // under the HUD: fresh feedback wins
         hud::draw(canvas, frameStart);
         if (!cf.seenIntro) drawIntro(canvas);
         if (trigEngaged) {  // G0 trigger macro engaged — name the action
