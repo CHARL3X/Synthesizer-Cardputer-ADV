@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "dsp/morph.h"
 #include "dsp/patches.h"
 #include "dsp/pitch.h"
 #include "dsp/sound_gen.h"
@@ -750,6 +751,45 @@ int main() {
         CHECK(store::decodePatch(buf, nd1, out4), "stream with an unknown string tag decodes");
         CHECK(fabsf(out4.synth.cutoffHz - 1234.f) < 0.5f, "scalars before the unknown tag applied");
         CHECK(out4.name[0] == '\0', "unknown string tag skipped, name left unset");
+    }
+
+    // ---- synth morph: perceptual interpolation between two sounds ----------
+    {
+        SynthParams a;  // neutral defaults
+        SynthParams b;
+        b.wave = Waveform::Square;
+        b.cutoffHz = 400.f;
+        b.attackS = 0.5f;
+        b.sustain = 0.2f;
+        b.resonance = 0.9f;
+        b.chorusDepth = 1.f;
+        b.voiceCount = 2;
+        b.slots[0] = ModSlot::make(ModSource::LFO1, ModDest::Cutoff, 0.8f);
+
+        const SynthParams m0 = morphParams(a, b, 0.f);
+        CHECK(m0.cutoffHz == a.cutoffHz && m0.wave == a.wave && m0.sustain == a.sustain,
+              "morph t=0 is exactly a");
+        const SynthParams m1 = morphParams(a, b, 1.f);
+        CHECK(m1.cutoffHz == b.cutoffHz && m1.wave == b.wave && m1.sustain == b.sustain,
+              "morph t=1 is b's sound");
+        CHECK(m1.voiceCount == a.voiceCount, "voiceCount never morphs (no voice yanking)");
+
+        const SynthParams mh = morphParams(a, b, 0.5f);
+        const float gm = sqrtf((a.cutoffHz + 1e-3f) * (b.cutoffHz + 1e-3f)) - 1e-3f;
+        CHECK(fabsf(mh.cutoffHz - gm) < 1.f, "cutoff lerps geometrically");
+        CHECK(fabsf(mh.sustain - 0.45f) < 0.01f, "sustain lerps linearly");
+        CHECK(morphParams(a, b, 0.49f).wave == a.wave && mh.wave == b.wave,
+              "discretes switch at the midpoint");
+        CHECK(mh.resonance >= a.resonance && mh.resonance <= b.resonance,
+              "linear lerp stays inside the endpoints");
+        CHECK(mh.attackS > a.attackS && mh.attackS < b.attackS, "times move monotonically");
+        // mismatched mod routing: depth breathes out, swaps, breathes in
+        CHECK(fabsf(mh.slots[0].depth) < 0.05f, "mismatched slot depth ~0 at midpoint");
+        CHECK(morphParams(a, b, 0.75f).slots[0].depth > 0.3f, "b's slot fades in past midpoint");
+        // live-mod fields ride from a, never blended
+        SynthParams a2 = a;
+        a2.bendCents = 123.f;
+        CHECK(morphParams(a2, b, 1.f).bendCents == 123.f, "live-mod fields stay the caller's");
     }
 
     if (failures == 0) {
