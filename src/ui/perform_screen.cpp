@@ -54,13 +54,13 @@ float gTrailCenter = 69.f;  // view center in MIDI, follows the lead slowly
 bool gTrailCenterSet = false;
 constexpr float kVibVisGain = 2.5f;  // visual exaggeration of the vibrato wobble
 
-// Add one tilt axis's contribution into the three mod accumulators. Cutoff is
-// additive (octaves), vibrato additive (cents); volume is multiplicative (a
-// swell), so two volume routes compound — floored by the caller. oneSided:
-// axis A vibrato only leans one way ("forward to sing"); axis B (roll) is
-// symmetric, so a roll either direction adds vibrato.
+// Add one tilt axis's contribution into the mod accumulators. Cutoff is
+// additive (octaves), vibrato additive (cents), morph additive (blend);
+// volume is multiplicative (a swell), so two volume routes compound — floored
+// by the caller. oneSided: axis A vibrato/morph only lean one way ("forward
+// to sing" / forward into the other sound); axis B (roll) is symmetric.
 void accumTilt(store::TiltRoute route, float v, float depth, bool oneSided,
-               float& cutOct, float& vibCents, float& volMul) {
+               float& cutOct, float& vibCents, float& volMul, float& morphAmt) {
     switch (route) {
         case store::TiltRoute::Cutoff:  // the wah
             cutOct += v * 2.f * depth;
@@ -71,6 +71,9 @@ void accumTilt(store::TiltRoute route, float v, float depth, bool oneSided,
         case store::TiltRoute::Volume:  // the swell pedal
             volMul *= 1.f - depth * 0.9f * (0.5f - v * 0.5f);
             break;
+        case store::TiltRoute::Morph:   // lean into the previous sound
+            morphAmt += (oneSided ? (v > 0.f ? v : 0.f) : fabsf(v)) * depth;
+            break;
         default:
             break;
     }
@@ -79,7 +82,7 @@ void accumTilt(store::TiltRoute route, float v, float depth, bool oneSided,
 void applyTilt() {
     auto& c = store::get();
     auto& s = c.synth;
-    float cutOct = 0.f, vibCents = 0.f, volMul = 1.f;
+    float cutOct = 0.f, vibCents = 0.f, volMul = 1.f, morphAmt = 0.f;
     float rawA = 0.f, rawB = 0.f;  // raw axes, exposed as mod-matrix sources
 
     // Guard on enabled+available only — axis A may be Off while roll (B) is
@@ -101,9 +104,10 @@ void applyTilt() {
         rawA = latched ? latchedA : tilt::value();
         rawB = latched ? latchedB : tilt::valueB();  // read both, even if dual is off,
                                                       // so the matrix can route roll
-        accumTilt(c.tiltRoute, rawA, c.tiltDepth, true, cutOct, vibCents, volMul);
+        accumTilt(c.tiltRoute, rawA, c.tiltDepth, true, cutOct, vibCents, volMul, morphAmt);
         if (c.tiltDual)
-            accumTilt(c.tiltRouteB, rawB, c.tiltDepthB, false, cutOct, vibCents, volMul);
+            accumTilt(c.tiltRouteB, rawB, c.tiltDepthB, false, cutOct, vibCents, volMul,
+                      morphAmt);
         if (cutOct > 3.f) cutOct = 3.f;
         if (cutOct < -3.f) cutOct = -3.f;
         if (volMul < 0.1f) volMul = 0.1f;  // two volume routes can't hit silence
@@ -111,6 +115,8 @@ void applyTilt() {
     s.cutoffModOct = cutOct;
     s.vibratoCents = vibCents;
     s.volMod = volMul;
+    morph::setTiltAmt(morphAmt);  // tilt's push on the blend fader (0 when tilt
+                                  // is off/unavailable — this path always runs)
     s.tiltAVal = rawA;  // matrix sources (separate from the hardwired routes above)
     s.tiltBVal = rawB;
     s.tempoBpm = (float)c.jamBpm;  // publish the jam tempo for the synced delay

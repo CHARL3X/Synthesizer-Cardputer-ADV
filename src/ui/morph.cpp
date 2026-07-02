@@ -7,6 +7,7 @@ namespace morph {
 namespace {
 float gPos = 0.f;
 float gTarget = 0.f;
+float gTilt = 0.f;  // tilt's push on the same fader — unramped, summed in pos()
 uint32_t gLastMs = 0;
 }  // namespace
 
@@ -21,6 +22,10 @@ void setHold(float target01) {
     gTarget = target01 < 0.f ? 0.f : (target01 > 1.f ? 1.f : target01);
 }
 
+void setTiltAmt(float amt01) {
+    gTilt = amt01 < 0.f ? 0.f : (amt01 > 1.f ? 1.f : amt01);
+}
+
 void tick(uint32_t nowMs) {
     const uint32_t dt = gLastMs ? nowMs - gLastMs : 0;
     gLastMs = nowMs;
@@ -32,6 +37,11 @@ void tick(uint32_t nowMs) {
     else if (gPos > gTarget) gPos = gPos - step < gTarget ? gTarget : gPos - step;
 }
 
-float pos() { return gPos; }
+float pos() {
+    // every control pushes the same fader: contributions add, the fader stops
+    // at the end (the accumTilt house rule, applied to the blend)
+    const float p = gPos + gTilt;
+    return p > 1.f ? 1.f : p;
+}
 
 }  // namespace morph

@@ -17,14 +17,18 @@ enum class GlideMode : uint8_t {
 
 // Tilt is an assignable effects modulator — never pitch bend (rejected on
 // tape: "fuck, I gotta lean it over again"). Lives in dsp so patches can
-// carry a tilt personality and stay portable.
-enum class TiltRoute : uint8_t { Off, Cutoff, Vibrato, Volume, Count };
+// carry a tilt personality and stay portable. Append-only (persisted in
+// patches). Morph = lean into the synth-morph blend (the UI drives it; note
+// sound_gen's randTiltRoute deliberately never rolls it — a generated patch
+// must not depend on what the player happened to play previously).
+enum class TiltRoute : uint8_t { Off, Cutoff, Vibrato, Volume, Morph, Count };
 
 inline const char* tiltRouteName(TiltRoute r) {
     switch (r) {
         case TiltRoute::Cutoff:  return "cutoff";
         case TiltRoute::Vibrato: return "vibrato";
         case TiltRoute::Volume:  return "volume";
+        case TiltRoute::Morph:   return "morph";
         default:                 return "off";
     }
 }
