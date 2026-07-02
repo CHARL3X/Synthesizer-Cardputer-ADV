@@ -1128,12 +1128,15 @@ void run(M5Canvas& canvas) {
 
         if (demo::pending()) break;  // Demo mode fired: hand off to the perform loop
 
+        bool justExpanded = false;  // -> scroll the opened section to the top
         if (isHeader(sel)) {
             // fold / unfold the section: enter toggles, ► opens, ◄ closes.
             const int sec = sectionOf(sel);
+            const bool was = gExpanded[sec];
             if (enterHit) gExpanded[sec] = !gExpanded[sec];
             else if (dir > 0) gExpanded[sec] = true;
             else if (dir < 0) gExpanded[sec] = false;
+            justExpanded = !was && gExpanded[sec];
         } else {
             // ordinary row (incl. the Randomize/Mutate buttons): ◄/► adjust,
             // enter activates. The button rows ignore the sign — either fires.
@@ -1152,6 +1155,8 @@ void run(M5Canvas& canvas) {
         int vsel = 0;
         for (int k = 0; k < nv; ++k)
             if (vis[k] == sel) { vsel = k; break; }
+        if (justExpanded) top = vsel;  // opened section: its header snaps to the
+                                       // top so the revealed rows show at once
         if (vsel < top) top = vsel;
         if (vsel >= top + kVisible) top = vsel - kVisible + 1;
         if (vsel > 0 && isHeader(vis[vsel - 1]) && top > vsel - 1)

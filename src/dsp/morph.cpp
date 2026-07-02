@@ -31,8 +31,9 @@ SynthParams morphParams(const SynthParams& a, const SynthParams& b, float t) {
         out.tiltAVal = a.tiltAVal;
         out.tiltBVal = a.tiltBVal;
         out.voiceCount = a.voiceCount;  // never yank sounding voices mid-blend
-        return out;
-    }
+        out.masterVol = a.masterVol;    // volume is the PLAYER's, not the sound's
+        return out;                     // (the applyPatchData rule) — the volume
+    }                                   // keys must work at any blend depth
 
     SynthParams o = a;  // live-mod fields + voiceCount ride along from a
     const bool far = t >= 0.5f;
@@ -61,10 +62,10 @@ SynthParams morphParams(const SynthParams& a, const SynthParams& b, float t) {
     o.modEnvAtkS = geo(a.modEnvAtkS, b.modEnvAtkS, t);
     o.modEnvDecS = geo(a.modEnvDecS, b.modEnvDecS, t);
 
-    // levels/mixes/depths: linear (in-range in -> in-range out)
+    // levels/mixes/depths: linear (in-range in -> in-range out).
+    // masterVol is NOT here: volume belongs to the player (rides from a).
     o.sustain = lin(a.sustain, b.sustain, t);
     o.resonance = lin(a.resonance, b.resonance, t);
-    o.masterVol = lin(a.masterVol, b.masterVol, t);
     o.detuneCents = lin(a.detuneCents, b.detuneCents, t);
     o.fenvOct = lin(a.fenvOct, b.fenvOct, t);
     o.subLevel = lin(a.subLevel, b.subLevel, t);

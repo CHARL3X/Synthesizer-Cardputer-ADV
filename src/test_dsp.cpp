@@ -774,6 +774,11 @@ int main() {
         CHECK(m1.cutoffHz == b.cutoffHz && m1.wave == b.wave && m1.sustain == b.sustain,
               "morph t=1 is b's sound");
         CHECK(m1.voiceCount == a.voiceCount, "voiceCount never morphs (no voice yanking)");
+        SynthParams bLoud = b;
+        bLoud.masterVol = 0.1f;
+        CHECK(morphParams(a, bLoud, 1.f).masterVol == a.masterVol &&
+                  morphParams(a, bLoud, 0.5f).masterVol == a.masterVol,
+              "masterVol is the player's: volume keys work at any blend depth");
 
         const SynthParams mh = morphParams(a, b, 0.5f);
         const float gm = sqrtf((a.cutoffHz + 1e-3f) * (b.cutoffHz + 1e-3f)) - 1e-3f;

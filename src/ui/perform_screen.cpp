@@ -828,6 +828,11 @@ void run() {
         // press (rising edge), so a tap arms it and a second tap releases.
         const bool trigRaw = keys::triggerHeld();
         static bool trigPrev = false, trigLatched = false;
+        static uint8_t trigActPrev = cf.triggerAction;
+        if (cf.triggerAction != trigActPrev) {  // action changed in settings:
+            trigActPrev = cf.triggerAction;     // never come back pre-engaged
+            trigLatched = false;
+        }
         if (trigRaw && !trigPrev) trigLatched = !trigLatched;
         trigPrev = trigRaw;
         const bool trigEngaged = cf.triggerLatch ? trigLatched : trigRaw;

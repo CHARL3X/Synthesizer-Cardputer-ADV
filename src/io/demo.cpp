@@ -65,6 +65,8 @@ void start(uint32_t nowMs) {
         // 4 bars, but the pad re-blooms every half bar — a pulse, not a wash
         g.jamChordBeats = 2;
         if (g.jamBpm < 70 || g.jamBpm > 130) g.jamBpm = 92;  // a groove tempo
+        store::unlockBacking();  // a stale solo/backing split would trap the
+                                 // bed on its frozen sound — Ethereal must land
         store::applyPatch(kBedSlot);         // nothing sounds yet — no lock
         const int8_t keepOct = g.layout.octave;
         g.layout.octave = 4;                 // bed = this minus an octave: audible
@@ -120,10 +122,13 @@ void tick(uint32_t nowMs) {
         return;
     }
     // melody rides "string 2" of the live layout math, register clamped so a
-    // very low or high player octave never buries the line
+    // very low or high player octave never buries the line. Scale lock is
+    // FORCED on for the melody: its degrees are scale steps — read chromatic
+    // (lock off) they'd be atonal semitone runs.
     dsp::Layout lay = g.layout;
     if (lay.octave < 3) lay.octave = 3;
     if (lay.octave > 5) lay.octave = 5;
+    lay.scaleLock = true;
     const float pitch = dsp::gridToMidi(lay, 2, n.degree, false);
 
     if (n.type == dsp::DemoNote::Slide && gRinging) {
