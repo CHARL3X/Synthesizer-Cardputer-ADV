@@ -56,7 +56,8 @@ struct GlideConfig {
     // B = left/right roll. Each routes to its own destination (per patch).
     TiltRoute tiltRoute = TiltRoute::Vibrato;   // axis A route — on by default
     float tiltDepth = 0.6f;   // axis A depth, 0..1
-    float tiltCenter = 0.35f;  // axis A calibrated "flat" default (+35) — wherever YOU hold it
+    float tiltCenter = 0.23f;  // axis A calibrated "flat" default (~20° of pitch,
+                               // in angle units where 1.0 = 90°) — wherever YOU hold it
     TiltRoute tiltRouteB = TiltRoute::Off;      // axis B (roll) route
     float tiltDepthB = 0.6f;  // axis B depth, 0..1
     float tiltCenterB = 0.f;  // axis B calibrated "flat"

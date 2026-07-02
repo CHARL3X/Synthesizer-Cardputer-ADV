@@ -48,6 +48,11 @@ constexpr float kTiltSign  = 1.0f;
 // out the roll plane maps to a different accel channel.
 constexpr int   kTiltAxisB = 0;     // 0=x 1=y 2=z  — left/right roll
 constexpr float kTiltSignB = 1.0f;
+// The screen-normal axis (gravity when flat) — the atan2 denominator that
+// carries the quadrant, so tilt keeps counting PAST vertical instead of
+// folding back. Flip kTiltSignZ if tilt reads ~full-scale while lying flat.
+constexpr int   kTiltAxisZ = 2;
+constexpr float kTiltSignZ = 1.0f;
 constexpr float kTiltSmooth = 0.15f; // per-frame smoothing toward raw reading
 
 // ---- microSD (SPI) — the personal patch library lives here ------------

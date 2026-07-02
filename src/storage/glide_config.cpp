@@ -555,6 +555,21 @@ void begin() {
                                              (int)TiltRoute::Count - 1);
     gCfg.tiltDepthB = clampT<int>(gPrefs.getInt("tiltdepb", (int)(d.tiltDepthB * 100)), 0, 100) / 100.f;
     gCfg.tiltCenterB = clampT<int>(gPrefs.getInt("tiltctrb", 0), -1000, 1000) / 1000.f;
+    // one-time: tilt became ANGLE-based (the raw accel component folded at 90°
+    // and ate calibration range off the top). Stored centers were sin(angle);
+    // convert so "flat" stays physically where the player calibrated it.
+    if (!gPrefs.getBool("tiltv2", false)) {
+        auto sinToAngle = [](float c) {
+            if (c > 1.f) c = 1.f;
+            if (c < -1.f) c = -1.f;
+            return asinf(c) / 1.5707963f;
+        };
+        gCfg.tiltCenter = sinToAngle(gCfg.tiltCenter);
+        gCfg.tiltCenterB = sinToAngle(gCfg.tiltCenterB);
+        gPrefs.putInt("tiltctr", (int)(gCfg.tiltCenter * 1000));
+        gPrefs.putInt("tiltctrb", (int)(gCfg.tiltCenterB * 1000));
+        gPrefs.putBool("tiltv2", true);
+    }
     gCfg.tiltOn = gPrefs.getBool("tilton", d.tiltOn);
     // one-time: gyro expression is on by default now — no need to press enter.
     // Adopt it once even on devices that saved tilt off (pre-2026-06-07).
