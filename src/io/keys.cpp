@@ -525,23 +525,30 @@ void cycleTilt() {
         gTiltLatched = false;  // a frozen mod is meaningless once tilt is off
     }
     if (cfgr.tiltOn) {
-        if (cfgr.tiltRoute == store::TiltRoute::Off) cfgr.tiltRoute = store::TiltRoute::Cutoff;
+        // don't auto-fill a physical route on an axis the global morph flag is
+        // already driving — it would silently change the patch's personality
+        if (!cfgr.tiltMorphA && cfgr.tiltRoute == store::TiltRoute::Off)
+            cfgr.tiltRoute = store::TiltRoute::Cutoff;
         if (cfgr.tiltDepth < 0.05f) cfgr.tiltDepth = 0.6f;
         if (cfgr.tiltDual) {
-            if (cfgr.tiltRouteB == store::TiltRoute::Off) cfgr.tiltRouteB = store::TiltRoute::Cutoff;
+            if (!cfgr.tiltMorphB && cfgr.tiltRouteB == store::TiltRoute::Off)
+                cfgr.tiltRouteB = store::TiltRoute::Cutoff;
             if (cfgr.tiltDepthB < 0.05f) cfgr.tiltDepthB = 0.6f;
         }
     }
+    // HUD names the EFFECTIVE routes (the morph flag masks the patch route)
+    const store::TiltRoute effA = store::effectiveTiltRoute(cfgr.tiltMorphA, cfgr.tiltRoute);
+    const store::TiltRoute effB = store::effectiveTiltRoute(cfgr.tiltMorphB, cfgr.tiltRouteB);
     char v[24];
     if (!cfgr.tiltOn) {
         hud::show("TILT", "off", -1.f);
     } else if (!cfgr.tiltDual) {
-        snprintf(v, sizeof v, "%s %d%%", store::tiltRouteName(cfgr.tiltRoute),
+        snprintf(v, sizeof v, "%s %d%%", store::tiltRouteName(effA),
                  (int)(cfgr.tiltDepth * 100));
         hud::show("TILT", v, cfgr.tiltDepth);
     } else {
-        snprintf(v, sizeof v, "%s + %s", store::tiltRouteName(cfgr.tiltRoute),
-                 store::tiltRouteName(cfgr.tiltRouteB));
+        snprintf(v, sizeof v, "%s + %s", store::tiltRouteName(effA),
+                 store::tiltRouteName(effB));
         hud::show("TILT 2D", v, cfgr.tiltDepthB);
     }
     store::markDirty();

@@ -150,11 +150,24 @@ void aJamChord(int d) {
     g.jamChordBeats = (uint8_t)clampT((int)g.jamChordBeats + d, 1, 8);
 }
 
-void fTilt(char* o, int c) { snprintf(o, c, "%s", store::tiltRouteName(store::get().tiltRoute)); }
+// The route rows cycle off/cutoff/vibrato/volume/morph as one sequence, but
+// MORPH lands in the global rig flag (survives sound switches, like the G0
+// action) while the physical routes stay per-patch personality. Cycling off
+// morph un-masks the patch's own route.
+void fTilt(char* o, int c) {
+    if (store::get().tiltMorphA) snprintf(o, c, "morph (global)");
+    else snprintf(o, c, "%s", store::tiltRouteName(store::get().tiltRoute));
+}
 void aTilt(int d) {
     auto& g = store::get();
-    g.tiltRoute = (store::TiltRoute)(((int)g.tiltRoute + d + (int)store::TiltRoute::Count) %
-                                     (int)store::TiltRoute::Count);
+    const int cur = g.tiltMorphA ? (int)store::TiltRoute::Morph : (int)g.tiltRoute;
+    const int next = (cur + d + (int)store::TiltRoute::Count) % (int)store::TiltRoute::Count;
+    if (next == (int)store::TiltRoute::Morph) {
+        g.tiltMorphA = true;  // rig setting: the patch's own route is masked, kept
+    } else {
+        g.tiltMorphA = false;
+        g.tiltRoute = (store::TiltRoute)next;
+    }
 }
 
 void fTiltDepth(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().tiltDepth * 100)); }
@@ -163,11 +176,20 @@ void aTiltDepth(int d) {
     g.tiltDepth = clampT(g.tiltDepth + d * 0.05f, 0.f, 1.f);
 }
 
-void fTiltB(char* o, int c) { snprintf(o, c, "%s", store::tiltRouteName(store::get().tiltRouteB)); }
+void fTiltB(char* o, int c) {
+    if (store::get().tiltMorphB) snprintf(o, c, "morph (global)");
+    else snprintf(o, c, "%s", store::tiltRouteName(store::get().tiltRouteB));
+}
 void aTiltB(int d) {
     auto& g = store::get();
-    g.tiltRouteB = (store::TiltRoute)(((int)g.tiltRouteB + d + (int)store::TiltRoute::Count) %
-                                      (int)store::TiltRoute::Count);
+    const int cur = g.tiltMorphB ? (int)store::TiltRoute::Morph : (int)g.tiltRouteB;
+    const int next = (cur + d + (int)store::TiltRoute::Count) % (int)store::TiltRoute::Count;
+    if (next == (int)store::TiltRoute::Morph) {
+        g.tiltMorphB = true;
+    } else {
+        g.tiltMorphB = false;
+        g.tiltRouteB = (store::TiltRoute)next;
+    }
 }
 
 void fTiltDepthB(char* o, int c) { snprintf(o, c, "%d %%", (int)(store::get().tiltDepthB * 100)); }

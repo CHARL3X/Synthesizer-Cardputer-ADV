@@ -63,6 +63,14 @@ struct GlideConfig {
     float tiltCenterB = 0.f;  // axis B calibrated "flat"
     bool tiltOn = true;       // tilt expression on by default (single-axis)
     bool tiltDual = false;    // also use axis B (roll) — the 2D body, opt-in
+    // Tilt->MORPH is a RIG setting, global like the G0 trigger action — not a
+    // patch personality. The morph partner is "the sound you were just on"
+    // (session state), so a patch can't meaningfully own the mapping; and the
+    // player who set it expects it to survive sound switches. While a flag is
+    // on it masks that axis's per-patch physical route; patches themselves can
+    // never carry the morph route (coerced to Off on load).
+    bool tiltMorphA = false;
+    bool tiltMorphB = false;
     uint8_t currentPatch = 0; // active sound slot (fn+q..p)
     uint8_t jamRows = 1;      // 0=off, 1..2 bottom rows become tap-to-latch
                               // drones (-1 oct): the layering jam — backing
@@ -110,6 +118,12 @@ struct GlideConfig {
 };
 
 GlideConfig& get();
+
+// The route an axis actually plays: the global morph flag masks the patch's
+// physical route (morph is a rig setting — see tiltMorphA/B above).
+inline TiltRoute effectiveTiltRoute(bool morphFlag, TiltRoute patchRoute) {
+    return morphFlag ? TiltRoute::Morph : patchRoute;
+}
 
 void begin();                 // load from NVS (or defaults on first boot)
 bool nvsHealthy();            // false if NVS failed to open -> nothing persists

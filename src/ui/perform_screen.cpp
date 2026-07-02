@@ -104,10 +104,11 @@ void applyTilt() {
         rawA = latched ? latchedA : tilt::value();
         rawB = latched ? latchedB : tilt::valueB();  // read both, even if dual is off,
                                                       // so the matrix can route roll
-        accumTilt(c.tiltRoute, rawA, c.tiltDepth, true, cutOct, vibCents, volMul, morphAmt);
+        accumTilt(store::effectiveTiltRoute(c.tiltMorphA, c.tiltRoute), rawA, c.tiltDepth,
+                  true, cutOct, vibCents, volMul, morphAmt);
         if (c.tiltDual)
-            accumTilt(c.tiltRouteB, rawB, c.tiltDepthB, false, cutOct, vibCents, volMul,
-                      morphAmt);
+            accumTilt(store::effectiveTiltRoute(c.tiltMorphB, c.tiltRouteB), rawB,
+                      c.tiltDepthB, false, cutOct, vibCents, volMul, morphAmt);
         if (cutOct > 3.f) cutOct = 3.f;
         if (cutOct < -3.f) cutOct = -3.f;
         if (volMul < 0.1f) volMul = 0.1f;  // two volume routes can't hit silence

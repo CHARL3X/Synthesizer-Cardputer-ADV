@@ -220,6 +220,11 @@ void applyPatchData(const PatchData& pd) {
     gCfg.tiltDepth = clampT(pd.tiltDepth, 0.f, 1.f);
     gCfg.tiltRouteB = (TiltRoute)clampT<int>(pd.tiltRouteB, 0, (int)TiltRoute::Count - 1);
     gCfg.tiltDepthB = clampT(pd.tiltDepthB, 0.f, 1.f);
+    // patches can't carry the morph route (it's a global rig setting whose
+    // partner is session state); a blob that has it decodes to Off — and a
+    // patch load never flips the player's global flags either way
+    if (gCfg.tiltRoute == TiltRoute::Morph) gCfg.tiltRoute = TiltRoute::Off;
+    if (gCfg.tiltRouteB == TiltRoute::Morph) gCfg.tiltRouteB = TiltRoute::Off;
     gCfg.synth.masterVol = keepVol;
     gCfg.synth.bendCents = 0.f;  // live-mod fields never come from a patch
     gCfg.synth.vibratoCents = 0.f;
@@ -570,6 +575,19 @@ void begin() {
         gPrefs.putInt("tiltctrb", (int)(gCfg.tiltCenterB * 1000));
         gPrefs.putBool("tiltv2", true);
     }
+    gCfg.tiltMorphA = gPrefs.getBool("tmorpha", d.tiltMorphA);
+    gCfg.tiltMorphB = gPrefs.getBool("tmorphb", d.tiltMorphB);
+    // Morph is a rig setting, not a patch personality: a LIVE route persisted
+    // as Morph (builds before the split) converts into the global flag, so a
+    // player's tilt-blend setup survives the migration instead of vanishing.
+    if (gCfg.tiltRoute == TiltRoute::Morph) {
+        gCfg.tiltMorphA = true;
+        gCfg.tiltRoute = TiltRoute::Off;
+    }
+    if (gCfg.tiltRouteB == TiltRoute::Morph) {
+        gCfg.tiltMorphB = true;
+        gCfg.tiltRouteB = TiltRoute::Off;
+    }
     gCfg.tiltOn = gPrefs.getBool("tilton", d.tiltOn);
     // one-time: gyro expression is on by default now — no need to press enter.
     // Adopt it once even on devices that saved tilt off (pre-2026-06-07).
@@ -754,6 +772,8 @@ void persistNow() {
     gPrefs.putInt("tiltctrb", (int)(gCfg.tiltCenterB * 1000));
     gPrefs.putBool("tilton", gCfg.tiltOn);
     gPrefs.putBool("tiltdual", gCfg.tiltDual);
+    gPrefs.putBool("tmorpha", gCfg.tiltMorphA);
+    gPrefs.putBool("tmorphb", gCfg.tiltMorphB);
     gPrefs.putUChar("cpatch", gCfg.currentPatch);
     gPrefs.putUChar("jamrows", gCfg.jamRows);
     gPrefs.putUChar("dvoice", gCfg.droneVoicing);
